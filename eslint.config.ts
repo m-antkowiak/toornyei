@@ -3,6 +3,7 @@ import { defineConfigWithVueTs, vueTsConfigs } from '@vue/eslint-config-typescri
 import pluginVue from 'eslint-plugin-vue'
 import pluginOxlint from 'eslint-plugin-oxlint'
 import pluginUnicorn from 'eslint-plugin-unicorn'
+import pluginSonarjs from 'eslint-plugin-sonarjs'
 import pluginVitest from '@vitest/eslint-plugin'
 import skipFormatting from 'eslint-config-prettier/flat'
 
@@ -49,6 +50,17 @@ export default defineConfigWithVueTs(
   {
     ...pluginVitest.configs.recommended,
     files: ['src/**/__tests__/*'],
+  },
+
+  {
+    name: 'app/sonarjs-complexity',
+    files: ['**/*.{vue,ts,mts,tsx}'],
+    plugins: {
+      sonarjs: pluginSonarjs,
+    },
+    rules: {
+      'sonarjs/cognitive-complexity': ['error', 15],
+    },
   },
 
   ...pluginOxlint.buildFromOxlintConfigFile('.oxlintrc.json'),
