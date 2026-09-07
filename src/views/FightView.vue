@@ -14,10 +14,10 @@ const run = useRunStore()
     </section>
 
     <section>
-      <h2>Enemy</h2>
-      <p>Attack Speed: {{ run.enemy.attackSpeed }}</p>
-      <p>Damage: {{ run.enemy.damage }}</p>
-      <p>HP: {{ run.enemyHp }} / {{ run.enemy.hp }}</p>
+      <h2>Enemy (Rung {{ run.rungIndex + 1 }} / {{ run.ladder.length }})</h2>
+      <p>Attack Speed: {{ run.currentEnemy.attackSpeed }}</p>
+      <p>Damage: {{ run.currentEnemy.damage }}</p>
+      <p>HP: {{ run.enemyHp }} / {{ run.currentEnemy.hp }}</p>
     </section>
 
     <button :disabled="run.isFighting" @click="run.commitToFight()">Commit to Fight</button>

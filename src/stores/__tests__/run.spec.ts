@@ -15,8 +15,8 @@ describe('run store', () => {
   it('resolves a champion win when the champion out-damages the enemy', () => {
     const store = useRunStore()
     store.champion.damage = 20
-    store.enemy.damage = 5
-    store.enemy.hp = 40
+    store.currentEnemy.damage = 5
+    store.currentEnemy.hp = 40
 
     store.commitToFight()
     vi.advanceTimersByTime(3000)
@@ -29,7 +29,7 @@ describe('run store', () => {
     const store = useRunStore()
     store.champion.damage = 5
     store.champion.hp = 40
-    store.enemy.damage = 20
+    store.currentEnemy.damage = 20
 
     store.commitToFight()
     vi.advanceTimersByTime(3000)
@@ -42,8 +42,8 @@ describe('run store', () => {
     const store = useRunStore()
     store.champion.attackSpeed = 1
     store.champion.damage = 10
-    store.enemy.hp = 100
-    store.enemy.damage = 0
+    store.currentEnemy.hp = 100
+    store.currentEnemy.damage = 0
 
     store.commitToFight()
     expect(store.enemyHp).toBe(100)
@@ -66,5 +66,57 @@ describe('run store', () => {
 
     vi.advanceTimersByTime(5000)
     expect(store.enemyHp).toBe(enemyHpAfterWin)
+  })
+
+  describe('ladder progression', () => {
+    it('advances to the next rung and its enemy on a champion win', () => {
+      const store = useRunStore()
+      store.champion.damage = 1000
+      const firstEnemy = store.currentEnemy
+
+      expect(store.rungIndex).toBe(0)
+
+      store.commitToFight()
+      vi.advanceTimersByTime(1000)
+
+      expect(store.outcome).toBe('champion')
+      expect(store.rungIndex).toBe(1)
+      expect(store.currentEnemy).not.toBe(firstEnemy)
+    })
+
+    it('does not advance the rung on a champion loss', () => {
+      const store = useRunStore()
+      store.champion.damage = 5
+      store.champion.hp = 10
+      store.currentEnemy.damage = 1000
+
+      store.commitToFight()
+      vi.advanceTimersByTime(1000)
+
+      expect(store.outcome).toBe('enemy')
+      expect(store.rungIndex).toBe(0)
+    })
+
+    it('allows re-committing to the same enemy after a loss', () => {
+      const store = useRunStore()
+      store.champion.damage = 5
+      store.champion.hp = 10
+      store.currentEnemy.damage = 1000
+      const enemyBeforeLoss = store.currentEnemy
+
+      store.commitToFight()
+      vi.advanceTimersByTime(1000)
+      expect(store.outcome).toBe('enemy')
+      expect(store.currentEnemy).toBe(enemyBeforeLoss)
+
+      store.champion.hp = 1000
+      store.champion.damage = 1000
+      store.currentEnemy.damage = 1
+      store.commitToFight()
+      vi.advanceTimersByTime(1000)
+
+      expect(store.outcome).toBe('champion')
+      expect(store.rungIndex).toBe(1)
+    })
   })
 })
