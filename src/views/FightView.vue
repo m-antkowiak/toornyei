@@ -14,7 +14,7 @@ const run = useRunStore()
     </section>
 
     <section>
-      <h2>Enemy (Rung {{ run.rungIndex + 1 }} / {{ run.ladder.length }})</h2>
+      <h2>Enemy</h2>
       <p>Attack Speed: {{ run.currentEnemy.attackSpeed }}</p>
       <p>Damage: {{ run.currentEnemy.damage }}</p>
       <p>HP: {{ run.enemyHp }} / {{ run.currentEnemy.hp }}</p>
@@ -25,5 +25,21 @@ const run = useRunStore()
     <p v-if="run.isFighting">Fighting...</p>
     <p v-else-if="run.outcome === 'champion'">Champion wins!</p>
     <p v-else-if="run.outcome === 'enemy'">Champion loses.</p>
+
+    <section>
+      <h2>Ladder</h2>
+      <ol>
+        <li
+          v-for="(rung, index) in run.ladder"
+          :key="index"
+          :aria-current="index === run.rungIndex ? 'step' : undefined"
+        >
+          <span v-if="index < run.rungIndex">Cleared</span>
+          <span v-else-if="index === run.rungIndex">Champion here</span>
+          <span v-else>Locked</span>
+          — Attack Speed: {{ rung.attackSpeed }}, Damage: {{ rung.damage }}, HP: {{ rung.hp }}
+        </li>
+      </ol>
+    </section>
   </main>
 </template>
