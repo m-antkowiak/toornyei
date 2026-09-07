@@ -46,3 +46,4 @@ _Avoid_: XP as the canonical term (fine as shorthand), Stats (Experience and Sta
 ## Explicitly deferred (not building now)
 
 - **Offline progress**: the Ladder does not simulate time while the app/tab is fully closed. A future "online" mode may add this. The app must, however, keep ticking in real time while merely backgrounded (a different browser tab focused), not just while foregrounded.
+- **UI polish and finesse**: the current build phase is scoped to functionality and prototyping only — mechanics, state, and logic. Visual design, styling, and UX polish are explicitly out of scope until the underlying game systems are proven out.
