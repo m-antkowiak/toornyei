@@ -1,6 +1,13 @@
 import { reactive, ref, computed } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
-import { createFight, advanceFight, type FightState, type FightOutcome, type CombatantStats } from '@/domain/fight'
+import {
+  createFight,
+  advanceFight,
+  type FightState,
+  type FightCombatant,
+  type FightOutcome,
+  type CombatantStats,
+} from '@/domain/fight'
 import { mergeTraitSets, applyTraits, type Trait } from '@/domain/trait'
 import { pairUpcomingCombatants } from '@/domain/ecosystem'
 
@@ -184,7 +191,7 @@ export const useRunStore = defineStore('run', () => {
   const enemyHp = computed(() => fight.value?.enemy.currentHp ?? currentEnemyStats.value.hp)
   const isFighting = computed(() => fight.value !== undefined && fight.value.outcome === undefined)
 
-  function attackProgressOf(getCombatant: () => FightState['champion'] | undefined) {
+  function attackProgressOf(getCombatant: () => FightCombatant | undefined) {
     return computed(() => {
       const combatant = getCombatant()
       if (!combatant) return 0

@@ -69,6 +69,44 @@ describe('run store', () => {
     expect(store.enemyHp).toBe(enemyHpAfterWin)
   })
 
+  describe('attack progress', () => {
+    it('is zero for both combatants right after committing to a fight', () => {
+      const store = useRunStore()
+      store.champion.baseStats.attackSpeed = 1
+      store.currentEnemy.baseStats.attackSpeed = 1
+
+      store.commitToFight()
+
+      expect(store.championAttackProgress).toBe(0)
+      expect(store.enemyAttackProgress).toBe(0)
+    })
+
+    it('fills toward 1 over the attack interval and resets after an attack lands', () => {
+      const store = useRunStore()
+      store.champion.baseStats.attackSpeed = 1
+      store.champion.baseStats.hp = 1000
+      store.currentEnemy.baseStats.attackSpeed = 1
+      store.currentEnemy.baseStats.hp = 1000
+      store.currentEnemy.baseStats.damage = 0
+
+      store.commitToFight()
+      vi.advanceTimersByTime(500)
+
+      expect(store.championAttackProgress).toBeCloseTo(0.5, 1)
+
+      vi.advanceTimersByTime(500)
+
+      expect(store.championAttackProgress).toBeCloseTo(0, 1)
+    })
+
+    it('is zero when no fight is in progress', () => {
+      const store = useRunStore()
+
+      expect(store.championAttackProgress).toBe(0)
+      expect(store.enemyAttackProgress).toBe(0)
+    })
+  })
+
   describe('ladder progression', () => {
     it('advances to the next rung and its enemy on a champion win', () => {
       const store = useRunStore()
