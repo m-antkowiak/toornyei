@@ -11,7 +11,7 @@ import {
 import { mergeTraitSets, applyTraits, type Trait } from '@/domain/trait'
 import { pairUpcomingCombatants } from '@/domain/ecosystem'
 
-const TICK_INTERVAL_MS = 100
+const TICK_INTERVAL_MS = 20
 
 const CHAMPION_BASE_STATS: CombatantStats = { attackSpeed: 1, damage: 10, hp: 100 }
 
