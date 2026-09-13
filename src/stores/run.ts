@@ -2,6 +2,7 @@ import { reactive, ref, computed } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { createFight, advanceFight, type FightState, type FightOutcome, type CombatantStats } from '@/domain/fight'
 import { mergeTraitSets, applyTraits, type Trait } from '@/domain/trait'
+import { pairUpcomingCombatants } from '@/domain/ecosystem'
 
 const TICK_INTERVAL_MS = 100
 
@@ -43,6 +44,10 @@ function createLadder(): Combatant[] {
   )
 }
 
+function combatantStats(combatant: Combatant): CombatantStats {
+  return applyTraits(combatant.baseStats, combatant.traits)
+}
+
 export const useRunStore = defineStore('run', () => {
   const champion = createChampion()
   const ladder = ref(createLadder())
@@ -55,11 +60,12 @@ export const useRunStore = defineStore('run', () => {
   let intervalId: ReturnType<typeof setInterval> | undefined
   let lastTickAt = 0
 
+  const ecosystemFights = new Map<number, FightState>()
+  let ecosystemIntervalId: ReturnType<typeof setInterval> | undefined
+  let lastEcosystemTickAt = 0
+
   function statsOf(getCombatant: () => Combatant) {
-    return computed(() => {
-      const combatant = getCombatant()
-      return applyTraits(combatant.baseStats, combatant.traits)
-    })
+    return computed(() => combatantStats(getCombatant()))
   }
 
   const championStats = statsOf(() => champion)
@@ -72,12 +78,62 @@ export const useRunStore = defineStore('run', () => {
     intervalId = undefined
   }
 
+  function resolveEcosystemFight(a: number, b: number, result: FightOutcome) {
+    const winnerIndex = result === 'champion' ? a : b
+    const loserIndex = result === 'champion' ? b : a
+    const winner = ladder.value[winnerIndex]!
+    const loser = ladder.value[loserIndex]!
+    winner.traits = mergeTraitSets(winner.traits, loser.traits)
+    loser.traits = []
+  }
+
+  function tickEcosystem(elapsedMs: number) {
+    const pairs = pairUpcomingCombatants(ladder.value.length, rungIndex.value)
+    const activeFirstIndices = new Set(pairs.map(([a]) => a))
+
+    for (const first of ecosystemFights.keys()) {
+      if (!activeFirstIndices.has(first)) ecosystemFights.delete(first)
+    }
+
+    for (const [a, b] of pairs) {
+      let fight = ecosystemFights.get(a)
+      if (!fight) {
+        fight = createFight(combatantStats(ladder.value[a]!), combatantStats(ladder.value[b]!))
+        ecosystemFights.set(a, fight)
+      }
+
+      advanceFight(fight, elapsedMs)
+      if (fight.outcome !== undefined) {
+        resolveEcosystemFight(a, b, fight.outcome)
+        ecosystemFights.delete(a)
+      }
+    }
+  }
+
+  function stopEcosystemTicking() {
+    if (ecosystemIntervalId === undefined) return
+    clearInterval(ecosystemIntervalId)
+    ecosystemIntervalId = undefined
+  }
+
+  function startEcosystemTicking() {
+    stopEcosystemTicking()
+    lastEcosystemTickAt = Date.now()
+    ecosystemIntervalId = setInterval(() => {
+      const now = Date.now()
+      const elapsedMs = now - lastEcosystemTickAt
+      lastEcosystemTickAt = now
+      tickEcosystem(elapsedMs)
+    }, TICK_INTERVAL_MS)
+  }
+
   function resolveFightOutcome(result: FightOutcome) {
     outcome.value = result
     stopTicking()
 
     if (result === 'enemy') {
       runStatus.value = 'defeated'
+      stopEcosystemTicking()
       return
     }
 
@@ -86,6 +142,7 @@ export const useRunStore = defineStore('run', () => {
       rungIndex.value += 1
     } else {
       runStatus.value = 'victorious'
+      stopEcosystemTicking()
     }
   }
 
@@ -113,12 +170,14 @@ export const useRunStore = defineStore('run', () => {
   function reset() {
     if (runStatus.value === 'active') return
     stopTicking()
+    ecosystemFights.clear()
     Object.assign(champion, createChampion())
     ladder.value = createLadder()
     rungIndex.value = 0
     runStatus.value = 'active'
     fight.value = undefined
     outcome.value = undefined
+    startEcosystemTicking()
   }
 
   const championHp = computed(() => fight.value?.champion.currentHp ?? championStats.value.hp)
@@ -136,6 +195,8 @@ export const useRunStore = defineStore('run', () => {
 
   const championAttackProgress = attackProgressOf(() => fight.value?.champion)
   const enemyAttackProgress = attackProgressOf(() => fight.value?.enemy)
+
+  startEcosystemTicking()
 
   return {
     champion,

@@ -89,6 +89,9 @@ const run = useRunStore()
             <div class="fill" :style="{ width: run.enemyAttackProgress * 100 + '%' }" />
           </div>
         </div>
+        <div v-if="run.currentEnemy.traits.length > 0" class="traits">
+          <span v-for="trait in run.currentEnemy.traits" :key="trait.stat">{{ trait.stat }} +{{ trait.amount }}</span>
+        </div>
       </section>
     </aside>
   </main>

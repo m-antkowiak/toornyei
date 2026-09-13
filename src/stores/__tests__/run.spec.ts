@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useRunStore } from '../run'
+import { applyTraits } from '@/domain/trait'
 
 describe('run store', () => {
   beforeEach(() => {
@@ -118,7 +119,7 @@ describe('run store', () => {
       const store = useRunStore()
       store.champion.baseStats.damage = 1000
       store.champion.baseStats.hp = 1000
-      store.ladder[1]!.baseStats.hp = 1
+      store.ladder[1]!.baseStats.hp = 900
       store.ladder[1]!.traits = [{ stat: 'damage', amount: 4 }]
 
       store.commitToFight()
@@ -162,6 +163,70 @@ describe('run store', () => {
 
       expect(store.outcome).toBe('champion')
       expect(store.runStatus).toBe('victorious')
+    })
+  })
+
+  describe('ecosystem', () => {
+    it('ticks enemies not engaged by the champion against each other, transferring the loser\'s traits to the winner', () => {
+      const store = useRunStore()
+      store.ladder[1]!.baseStats.damage = 1000
+
+      vi.advanceTimersByTime(1000)
+
+      expect(store.ladder[1]!.traits).toEqual(
+        expect.arrayContaining([
+          { stat: 'attackSpeed', amount: 0.1 },
+          { stat: 'hp', amount: 20 },
+        ]),
+      )
+      expect(store.ladder[2]!.traits).toEqual([])
+
+      const winnerStats = applyTraits(store.ladder[1]!.baseStats, store.ladder[1]!.traits)
+      expect(winnerStats.hp).toBe(store.ladder[1]!.baseStats.hp + 20)
+    })
+
+    it('does not tick the enemy currently engaged by the champion', () => {
+      const store = useRunStore()
+      const baselineTraits = [...store.ladder[0]!.traits]
+
+      vi.advanceTimersByTime(60_000)
+
+      expect(store.ladder[0]!.traits).toEqual(baselineTraits)
+    })
+
+    it('stops ticking once the run has concluded', () => {
+      const store = useRunStore()
+      store.champion.baseStats.damage = 1000
+      store.champion.baseStats.hp = 1000
+
+      for (let index = 0; index < store.ladder.length; index++) {
+        store.commitToFight()
+        vi.advanceTimersByTime(1000)
+      }
+      expect(store.runStatus).toBe('victorious')
+
+      const traitsAfterVictory = [...store.ladder[4]!.traits]
+      vi.advanceTimersByTime(60_000)
+
+      expect(store.ladder[4]!.traits).toEqual(traitsAfterVictory)
+    })
+
+    it('wipes ecosystem-earned traits on reset', () => {
+      const store = useRunStore()
+      store.ladder[1]!.baseStats.damage = 1000
+      vi.advanceTimersByTime(1000)
+      expect(store.ladder[1]!.traits.length).toBeGreaterThan(1)
+
+      store.champion.baseStats.damage = 5
+      store.champion.baseStats.hp = 10
+      store.currentEnemy.baseStats.damage = 1000
+      store.commitToFight()
+      vi.advanceTimersByTime(1000)
+      expect(store.runStatus).toBe('defeated')
+
+      store.reset()
+
+      expect(store.ladder[1]!.traits).toEqual([{ stat: 'attackSpeed', amount: 0.1 }])
     })
   })
 
