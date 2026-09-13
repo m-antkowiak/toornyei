@@ -5,54 +5,257 @@ const run = useRunStore()
 </script>
 
 <template>
-  <main>
-    <section>
-      <h2>Champion</h2>
-      <p>Attack Speed: {{ run.championStats.attackSpeed }}</p>
-      <p>Damage: {{ run.championStats.damage }}</p>
-      <p>HP: {{ run.championHp }} / {{ run.championStats.hp }}</p>
-      <p v-if="run.champion.traits.length > 0">
-        Traits:
-        <span v-for="trait in run.champion.traits" :key="trait.stat">
-          {{ trait.stat }} +{{ trait.amount }}
-        </span>
-      </p>
-    </section>
-
-    <section>
-      <h2>Enemy</h2>
-      <p>Attack Speed: {{ run.currentEnemyStats.attackSpeed }}</p>
-      <p>Damage: {{ run.currentEnemyStats.damage }}</p>
-      <p>HP: {{ run.enemyHp }} / {{ run.currentEnemyStats.hp }}</p>
-    </section>
-
-    <button :disabled="run.isFighting || run.runStatus !== 'active'" @click="run.commitToFight()">
-      Commit to Fight
-    </button>
-
-    <p v-if="run.isFighting">Fighting...</p>
-    <p v-else-if="run.runStatus === 'victorious'">Run over — you cleared the Ladder!</p>
-    <p v-else-if="run.runStatus === 'defeated'">Run over — your Champion has fallen.</p>
-    <p v-else-if="run.outcome === 'champion'">Champion wins!</p>
-    <p v-else-if="run.outcome === 'enemy'">Champion loses.</p>
-
-    <button v-if="run.runStatus !== 'active'" @click="run.reset()">Reset</button>
-
-    <section>
+  <main class="fight-layout">
+    <section class="ladder-column">
       <h2>Ladder</h2>
-      <ol>
+      <ol class="stepper">
         <li
           v-for="(rung, index) in run.ladder"
           :key="index"
+          class="step"
+          :class="{
+            cleared: index < run.rungIndex,
+            current: index === run.rungIndex,
+            locked: index > run.rungIndex,
+          }"
           :aria-current="index === run.rungIndex ? 'step' : undefined"
         >
-          <span v-if="index < run.rungIndex">Cleared</span>
-          <span v-else-if="index === run.rungIndex">Champion here</span>
-          <span v-else>Locked</span>
-          — Attack Speed: {{ rung.baseStats.attackSpeed }}, Damage: {{ rung.baseStats.damage }},
-          HP: {{ rung.baseStats.hp }}
+          <div class="dot">{{ index + 1 }}</div>
+          <div v-if="index < run.ladder.length - 1" class="connector" />
         </li>
       </ol>
+
+      <p v-if="run.isFighting" class="status">Fighting...</p>
+      <p v-else-if="run.runStatus === 'victorious'" class="status">Run over — you cleared the Ladder!</p>
+      <p v-else-if="run.runStatus === 'defeated'" class="status">Run over — your Champion has fallen.</p>
+      <p v-else-if="run.outcome === 'champion'" class="status">Champion wins!</p>
+      <p v-else-if="run.outcome === 'enemy'" class="status">Champion loses.</p>
+
+      <button :disabled="run.isFighting || run.runStatus !== 'active'" @click="run.commitToFight()">
+        Commit to Fight
+      </button>
+      <button v-if="run.runStatus !== 'active'" @click="run.reset()">Reset</button>
     </section>
+
+    <aside class="stat-rail">
+      <section class="panel">
+        <h2>Champion</h2>
+        <div class="stat-row">
+          <span>HP</span>
+          <div class="bar">
+            <div class="fill" :style="{ width: (run.championHp / run.championStats.hp) * 100 + '%' }" />
+          </div>
+          <span class="value">{{ run.championHp }}/{{ run.championStats.hp }}</span>
+        </div>
+        <div class="stat-row">
+          <span>Damage</span>
+          <span class="value">{{ run.championStats.damage }}</span>
+        </div>
+        <div class="stat-row">
+          <span>Attack Speed</span>
+          <span class="value">{{ run.championStats.attackSpeed }}</span>
+        </div>
+        <div v-if="run.isFighting" class="stat-row">
+          <span>Attack</span>
+          <div class="bar atk">
+            <div class="fill" :style="{ width: run.championAttackProgress * 100 + '%' }" />
+          </div>
+        </div>
+        <div v-if="run.champion.traits.length > 0" class="traits">
+          <span v-for="trait in run.champion.traits" :key="trait.stat">{{ trait.stat }} +{{ trait.amount }}</span>
+        </div>
+      </section>
+
+      <section class="panel enemy">
+        <h2>Enemy · Rung {{ run.rungIndex + 1 }}</h2>
+        <div class="stat-row">
+          <span>HP</span>
+          <div class="bar">
+            <div class="fill" :style="{ width: (run.enemyHp / run.currentEnemyStats.hp) * 100 + '%' }" />
+          </div>
+          <span class="value">{{ run.enemyHp }}/{{ run.currentEnemyStats.hp }}</span>
+        </div>
+        <div class="stat-row">
+          <span>Damage</span>
+          <span class="value">{{ run.currentEnemyStats.damage }}</span>
+        </div>
+        <div class="stat-row">
+          <span>Attack Speed</span>
+          <span class="value">{{ run.currentEnemyStats.attackSpeed }}</span>
+        </div>
+        <div v-if="run.isFighting" class="stat-row">
+          <span>Attack</span>
+          <div class="bar atk">
+            <div class="fill" :style="{ width: run.enemyAttackProgress * 100 + '%' }" />
+          </div>
+        </div>
+      </section>
+    </aside>
   </main>
 </template>
+
+<style scoped>
+.fight-layout {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.ladder-column {
+  flex: 1;
+  min-width: 0;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  margin: 1rem 0;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+  list-style: none;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  border: 2px solid var(--color-border);
+  font-size: 0.8rem;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.step.cleared .dot {
+  background: hsla(160, 100%, 37%, 0.2);
+  border-color: hsla(160, 100%, 37%, 1);
+}
+
+.step.current .dot {
+  background: rgba(179, 51, 51, 0.15);
+  border-color: #b33;
+  box-shadow: 0 0 0 4px rgba(179, 51, 51, 0.12);
+}
+
+.step.locked .dot {
+  opacity: 0.5;
+}
+
+.connector {
+  width: 2rem;
+  height: 2px;
+  background: var(--color-border);
+  flex-shrink: 0;
+}
+
+.step.cleared .connector {
+  background: hsla(160, 100%, 37%, 0.6);
+}
+
+.status {
+  margin: 0.75rem 0;
+}
+
+.stat-rail {
+  width: 15rem;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  position: sticky;
+  top: 1.5rem;
+}
+
+.panel {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.9rem;
+}
+
+.panel.enemy {
+  border-color: #b33;
+}
+
+.panel h2 {
+  font-size: 0.8rem;
+  opacity: 0.7;
+  margin-bottom: 0.6rem;
+}
+
+.stat-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  margin-bottom: 0.4rem;
+}
+
+.stat-row span:first-child {
+  width: 5.5rem;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.stat-row .value {
+  margin-left: auto;
+  font-weight: 600;
+}
+
+.bar {
+  flex: 1;
+  height: 6px;
+  background: var(--color-background-mute);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.bar.atk {
+  height: 4px;
+}
+
+.fill {
+  height: 100%;
+  background: hsla(160, 100%, 37%, 1);
+}
+
+.bar.atk .fill {
+  transition: width 0.1s linear;
+}
+
+.panel.enemy .fill {
+  background: #b33;
+}
+
+.traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+}
+
+.traits span {
+  background: var(--color-background-mute);
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .fight-layout {
+    flex-direction: column;
+  }
+
+  .stat-rail {
+    width: 100%;
+    position: static;
+  }
+}
+</style>
