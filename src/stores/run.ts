@@ -1,11 +1,11 @@
 import { reactive, ref, computed } from 'vue'
-import { defineStore } from 'pinia'
+import { defineStore, acceptHMRUpdate } from 'pinia'
 import { createFight, advanceFight, type FightState, type FightOutcome, type CombatantStats } from '@/domain/fight'
 import { mergeTraitSets, applyTraits, type Trait } from '@/domain/trait'
 
 const TICK_INTERVAL_MS = 100
 
-const CHAMPION_BASE_STATS: CombatantStats = { attackSpeed: 1, damage: 10, hp: 100 }
+const CHAMPION_BASE_STATS: CombatantStats = { attackSpeed: 5, damage: 500, hp: 5000 }
 
 interface LadderSeedEntry {
   baseStats: CombatantStats
@@ -125,6 +125,18 @@ export const useRunStore = defineStore('run', () => {
   const enemyHp = computed(() => fight.value?.enemy.currentHp ?? currentEnemyStats.value.hp)
   const isFighting = computed(() => fight.value !== undefined && fight.value.outcome === undefined)
 
+  function attackProgressOf(getCombatant: () => FightState['champion'] | undefined) {
+    return computed(() => {
+      const combatant = getCombatant()
+      if (!combatant) return 0
+      const intervalMs = 1000 / combatant.attackSpeed
+      return 1 - combatant.timeUntilNextAttackMs / intervalMs
+    })
+  }
+
+  const championAttackProgress = attackProgressOf(() => fight.value?.champion)
+  const enemyAttackProgress = attackProgressOf(() => fight.value?.enemy)
+
   return {
     champion,
     championStats,
@@ -137,7 +149,13 @@ export const useRunStore = defineStore('run', () => {
     championHp,
     enemyHp,
     isFighting,
+    championAttackProgress,
+    enemyAttackProgress,
     commitToFight,
     reset,
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useRunStore, import.meta.hot))
+}

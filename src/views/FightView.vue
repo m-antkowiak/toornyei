@@ -1,11 +1,32 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { useRunStore } from '@/stores/run'
+import PrototypeSwitcher from '@/components/PrototypeSwitcher.vue'
+import BracketTreeVariant from './ladder-prototypes/BracketTreeVariant.vue'
+import CollapsedRungsVariant from './ladder-prototypes/CollapsedRungsVariant.vue'
+import SideRailVariant from './ladder-prototypes/SideRailVariant.vue'
 
 const run = useRunStore()
+const route = useRoute()
+
+const LADDER_PROTOTYPE_VARIANTS = [
+  { key: 'A', label: 'Bracket tree' },
+  { key: 'B', label: 'Collapsed rungs' },
+  { key: 'C', label: 'Side rail' },
+]
+
+const activeVariant = computed(() => (import.meta.env.DEV ? (route.query['variant'] as string | undefined) : undefined))
 </script>
 
 <template>
-  <main>
+  <template v-if="activeVariant">
+    <BracketTreeVariant v-if="activeVariant === 'A'" />
+    <CollapsedRungsVariant v-else-if="activeVariant === 'B'" />
+    <SideRailVariant v-else-if="activeVariant === 'C'" />
+    <PrototypeSwitcher :variants="LADDER_PROTOTYPE_VARIANTS" />
+  </template>
+  <main v-else>
     <section>
       <h2>Champion</h2>
       <p>Attack Speed: {{ run.championStats.attackSpeed }}</p>
