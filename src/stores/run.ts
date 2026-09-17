@@ -15,7 +15,7 @@ import { useProgressionStore } from '@/stores/progression'
 const TICK_INTERVAL_MS = 20
 const EXPERIENCE_PER_FIGHT = 10
 
-const CHAMPION_BASE_STATS: CombatantStats = { attackSpeed: 1, damage: 10, hp: 100 }
+const CHAMPION_BASE_STATS: CombatantStats = { attackSpeed: 1, damage: 20, hp: 200 }
 
 interface LadderSeedEntry {
   baseStats: CombatantStats

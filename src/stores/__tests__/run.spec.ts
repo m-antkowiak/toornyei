@@ -313,7 +313,7 @@ describe('run store', () => {
       expect(store.runStatus).toBe('active')
       expect(store.rungIndex).toBe(0)
       expect(store.champion.traits).toEqual([])
-      expect(store.champion.baseStats).toEqual({ attackSpeed: 1, damage: 10, hp: 100 })
+      expect(store.champion.baseStats).toEqual({ attackSpeed: 1, damage: 20, hp: 200 })
       expect(store.outcome).toBeUndefined()
     })
 
