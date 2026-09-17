@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useRunStore } from '../run'
+import { useProgressionStore } from '../progression'
 import { applyTraits } from '@/domain/trait'
 
 describe('run store', () => {
@@ -265,6 +266,34 @@ describe('run store', () => {
       store.reset()
 
       expect(store.ladder[1]!.traits).toEqual([{ stat: 'attackSpeed', amount: 0.1 }])
+    })
+  })
+
+  describe('progression', () => {
+    it('grants permanent experience to the progression store on a champion win', () => {
+      const store = useRunStore()
+      const progression = useProgressionStore()
+      store.champion.baseStats.damage = 1000
+
+      store.commitToFight()
+      vi.advanceTimersByTime(1000)
+
+      expect(store.outcome).toBe('champion')
+      expect(progression.experience).toBeGreaterThan(0)
+    })
+
+    it('grants permanent experience to the progression store on a champion loss', () => {
+      const store = useRunStore()
+      const progression = useProgressionStore()
+      store.champion.baseStats.damage = 5
+      store.champion.baseStats.hp = 10
+      store.currentEnemy.baseStats.damage = 1000
+
+      store.commitToFight()
+      vi.advanceTimersByTime(1000)
+
+      expect(store.outcome).toBe('enemy')
+      expect(progression.experience).toBeGreaterThan(0)
     })
   })
 

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { useRunStore } from '@/stores/run'
+import { useProgressionStore } from '@/stores/progression'
 
 const run = useRunStore()
+const progression = useProgressionStore()
 </script>
 
 <template>
@@ -38,6 +40,14 @@ const run = useRunStore()
     </section>
 
     <aside class="stat-rail">
+      <section class="panel">
+        <h2>Progression</h2>
+        <div class="stat-row">
+          <span>Experience</span>
+          <span class="value">{{ progression.experience }}</span>
+        </div>
+      </section>
+
       <section class="panel">
         <h2>Champion</h2>
         <div class="stat-row">

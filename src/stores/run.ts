@@ -10,8 +10,10 @@ import {
 } from '@/domain/fight'
 import { mergeTraitSets, applyTraits, type Trait } from '@/domain/trait'
 import { pairUpcomingCombatants } from '@/domain/ecosystem'
+import { useProgressionStore } from '@/stores/progression'
 
 const TICK_INTERVAL_MS = 20
+const EXPERIENCE_PER_FIGHT = 10
 
 const CHAMPION_BASE_STATS: CombatantStats = { attackSpeed: 1, damage: 10, hp: 100 }
 
@@ -56,6 +58,8 @@ function combatantStats(combatant: Combatant): CombatantStats {
 }
 
 export const useRunStore = defineStore('run', () => {
+  const progression = useProgressionStore()
+
   const champion = createChampion()
   const ladder = ref(createLadder())
   const rungIndex = ref(0)
@@ -137,6 +141,7 @@ export const useRunStore = defineStore('run', () => {
   function resolveFightOutcome(result: FightOutcome) {
     outcome.value = result
     stopTicking()
+    progression.grantExperience(EXPERIENCE_PER_FIGHT)
 
     if (result === 'enemy') {
       runStatus.value = 'defeated'
