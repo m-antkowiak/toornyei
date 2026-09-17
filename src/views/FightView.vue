@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useRunStore } from '@/stores/run'
 import { useProgressionStore } from '@/stores/progression'
+import { formatNumber } from '@/domain/format'
 
 const run = useRunStore()
 const progression = useProgressionStore()
@@ -57,11 +58,11 @@ const progression = useProgressionStore()
         <h2>Progression</h2>
         <div class="stat-row">
           <span>Experience</span>
-          <span class="value">{{ progression.experience }}</span>
+          <span class="value">{{ formatNumber(progression.experience) }}</span>
         </div>
         <div class="stat-row">
           <span>Gold</span>
-          <span class="value">{{ progression.gold }}</span>
+          <span class="value">{{ formatNumber(progression.gold) }}</span>
         </div>
       </section>
 
@@ -72,15 +73,15 @@ const progression = useProgressionStore()
           <div class="bar">
             <div class="fill" :style="{ width: (run.championHp / run.championStats.hp) * 100 + '%' }" />
           </div>
-          <span class="value">{{ run.championHp }}/{{ run.championStats.hp }}</span>
+          <span class="value">{{ formatNumber(run.championHp) }}/{{ formatNumber(run.championStats.hp) }}</span>
         </div>
         <div class="stat-row">
           <span>Damage</span>
-          <span class="value">{{ run.championStats.damage }}</span>
+          <span class="value">{{ formatNumber(run.championStats.damage) }}</span>
         </div>
         <div class="stat-row">
           <span>Attack Speed</span>
-          <span class="value">{{ run.championStats.attackSpeed }}</span>
+          <span class="value">{{ formatNumber(run.championStats.attackSpeed) }}</span>
         </div>
         <div v-if="run.isFighting" class="stat-row">
           <span>Attack</span>
@@ -100,15 +101,15 @@ const progression = useProgressionStore()
           <div class="bar">
             <div class="fill" :style="{ width: (run.enemyHp / run.currentEnemyStats.hp) * 100 + '%' }" />
           </div>
-          <span class="value">{{ run.enemyHp }}/{{ run.currentEnemyStats.hp }}</span>
+          <span class="value">{{ formatNumber(run.enemyHp) }}/{{ formatNumber(run.currentEnemyStats.hp) }}</span>
         </div>
         <div class="stat-row">
           <span>Damage</span>
-          <span class="value">{{ run.currentEnemyStats.damage }}</span>
+          <span class="value">{{ formatNumber(run.currentEnemyStats.damage) }}</span>
         </div>
         <div class="stat-row">
           <span>Attack Speed</span>
-          <span class="value">{{ run.currentEnemyStats.attackSpeed }}</span>
+          <span class="value">{{ formatNumber(run.currentEnemyStats.attackSpeed) }}</span>
         </div>
         <div v-if="run.isFighting" class="stat-row">
           <span>Attack</span>
