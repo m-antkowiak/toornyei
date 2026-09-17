@@ -4,6 +4,8 @@ import { useRunStore } from '../run'
 import { useProgressionStore } from '../progression'
 import { applyTraits } from '@/domain/trait'
 import { experienceReward } from '@/domain/experience'
+import { goldReward } from '@/domain/gold'
+import { createFight, advanceFight } from '@/domain/fight'
 
 describe('run store', () => {
   beforeEach(() => {
@@ -348,6 +350,124 @@ describe('run store', () => {
 
       expect(store.outcome).toBe('enemy')
       expect(progression.experience).toBe(bankedAfterWin)
+    })
+  })
+
+  describe('gold and enemy upgrades', () => {
+    it('exposes the current enemys Gold and Experience reward for display', () => {
+      const store = useRunStore()
+      const expectedExperience = experienceReward(store.currentEnemy.experienceValue, store.rungIndex)
+      const expectedGold = goldReward(store.currentEnemy.goldValue, store.rungIndex)
+
+      expect(store.currentEnemyRewards).toEqual({ experience: expectedExperience, gold: expectedGold })
+    })
+
+    it('grants Gold scaled by the defeated enemys value and the rung reached, on a champion win', () => {
+      const store = useRunStore()
+      const progression = useProgressionStore()
+      store.champion.baseStats.damage = 1000
+      const expectedGold = goldReward(store.currentEnemy.goldValue, store.rungIndex)
+
+      store.commitToFight()
+      vi.advanceTimersByTime(1000)
+
+      expect(store.outcome).toBe('champion')
+      expect(progression.gold).toBe(expectedGold)
+    })
+
+    it('rejects an Enemy Upgrade purchase for an Enemy not yet defeated', () => {
+      const store = useRunStore()
+      const progression = useProgressionStore()
+      const index = 0
+      const enemy = store.ladder[index]!
+      const originalDamage = enemy.baseStats.damage
+      progression.gold = 1_000_000
+
+      const purchased = store.didPurchaseEnemyUpgrade(index)
+
+      expect(purchased).toBe(false)
+      expect(progression.gold).toBe(1_000_000)
+      expect(enemy.baseStats.damage).toBe(originalDamage)
+    })
+
+    it('applies an Enemy Upgrade for a defeated Enemy, deducting its cost from Gold', () => {
+      const store = useRunStore()
+      const progression = useProgressionStore()
+      store.champion.baseStats.damage = 1000
+
+      store.commitToFight()
+      vi.advanceTimersByTime(1000)
+      expect(store.outcome).toBe('champion')
+
+      const index = 0
+      const cost = store.upgradeCostOf(index)
+      progression.gold = cost
+
+      const purchased = store.didPurchaseEnemyUpgrade(index)
+
+      expect(purchased).toBe(true)
+      expect(progression.gold).toBe(0)
+    })
+
+    it("raises the upgraded Enemy's stats and reward, reflected in a subsequent Fight", () => {
+      const store = useRunStore()
+      const progression = useProgressionStore()
+      store.champion.baseStats.damage = 1000
+      store.champion.baseStats.hp = 1000
+
+      store.commitToFight()
+      vi.advanceTimersByTime(1000)
+      expect(store.outcome).toBe('champion')
+
+      const index = 0
+      const enemy = store.ladder[index]!
+      const statsBeforeUpgrade = applyTraits(enemy.baseStats, enemy.traits)
+      const goldValueBeforeUpgrade = enemy.goldValue
+      const experienceValueBeforeUpgrade = enemy.experienceValue
+
+      progression.gold = store.upgradeCostOf(index)
+      expect(store.didPurchaseEnemyUpgrade(index)).toBe(true)
+
+      const statsAfterUpgrade = applyTraits(enemy.baseStats, enemy.traits)
+      expect(statsAfterUpgrade.damage).toBeGreaterThan(statsBeforeUpgrade.damage)
+      expect(statsAfterUpgrade.hp).toBeGreaterThan(statsBeforeUpgrade.hp)
+      expect(enemy.goldValue).toBeGreaterThan(goldValueBeforeUpgrade)
+      expect(enemy.experienceValue).toBeGreaterThan(experienceValueBeforeUpgrade)
+
+      const rematch = createFight({ attackSpeed: 1, damage: 0, hp: 10_000 }, statsAfterUpgrade)
+      advanceFight(rematch, 1000)
+      expect(10_000 - rematch.champion.currentHp).toBeCloseTo(statsAfterUpgrade.damage)
+    })
+
+    it('persists Gold and a purchased Enemy Upgrade across a reset', () => {
+      const store = useRunStore()
+      const progression = useProgressionStore()
+      store.champion.baseStats.damage = 1000
+
+      store.commitToFight()
+      vi.advanceTimersByTime(1000)
+      expect(store.outcome).toBe('champion')
+
+      const index = 0
+      progression.gold = store.upgradeCostOf(index)
+      expect(store.didPurchaseEnemyUpgrade(index)).toBe(true)
+      const goldAfterPurchase = progression.gold
+      const upgradedDamage = store.ladder[index]!.baseStats.damage
+
+      store.champion.baseStats.damage = 5
+      store.champion.baseStats.hp = 10
+      store.currentEnemy.baseStats.damage = 1000
+      store.commitToFight()
+      vi.advanceTimersByTime(1000)
+      expect(store.runStatus).toBe('defeated')
+
+      store.reset()
+
+      expect(progression.gold).toBe(goldAfterPurchase)
+      expect(store.ladder[index]!.baseStats.damage).toBe(upgradedDamage)
+
+      progression.gold = store.upgradeCostOf(index)
+      expect(store.didPurchaseEnemyUpgrade(index)).toBe(true)
     })
   })
 

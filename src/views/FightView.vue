@@ -37,6 +37,19 @@ const progression = useProgressionStore()
         Commit to Fight
       </button>
       <button v-if="run.runStatus !== 'active'" @click="run.reset()">Reset</button>
+
+      <h2>Enemy Upgrades</h2>
+      <ul class="upgrade-list">
+        <li v-for="(enemy, index) in progression.enemyProgress" :key="index" class="upgrade-row">
+          <span>Rung {{ index + 1 }}</span>
+          <button
+            :disabled="!enemy.defeated || progression.gold < run.upgradeCostOf(index)"
+            @click="run.didPurchaseEnemyUpgrade(index)"
+          >
+            Upgrade ({{ run.upgradeCostOf(index) }}g)
+          </button>
+        </li>
+      </ul>
     </section>
 
     <aside class="stat-rail">
@@ -45,6 +58,10 @@ const progression = useProgressionStore()
         <div class="stat-row">
           <span>Experience</span>
           <span class="value">{{ progression.experience }}</span>
+        </div>
+        <div class="stat-row">
+          <span>Gold</span>
+          <span class="value">{{ progression.gold }}</span>
         </div>
       </section>
 
@@ -101,6 +118,10 @@ const progression = useProgressionStore()
         </div>
         <div v-if="run.currentEnemy.traits.length > 0" class="traits">
           <span v-for="trait in run.currentEnemy.traits" :key="trait.stat">{{ trait.stat }} +{{ trait.amount }}</span>
+        </div>
+        <div class="traits">
+          <span>exp +{{ run.currentEnemyRewards.experience }}</span>
+          <span>gold +{{ run.currentEnemyRewards.gold }}</span>
         </div>
       </section>
     </aside>
@@ -175,6 +196,22 @@ const progression = useProgressionStore()
 
 .status {
   margin: 0.75rem 0;
+}
+
+.upgrade-list {
+  list-style: none;
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.upgrade-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.85rem;
 }
 
 .stat-rail {
