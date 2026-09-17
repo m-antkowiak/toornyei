@@ -10,29 +10,44 @@ import {
 } from '@/domain/fight'
 import { mergeTraitSets, applyTraits, type Trait } from '@/domain/trait'
 import { pairUpcomingCombatants } from '@/domain/ecosystem'
+import { mergeExperience, experienceReward } from '@/domain/experience'
 import { useProgressionStore } from '@/stores/progression'
 
 const TICK_INTERVAL_MS = 20
-const EXPERIENCE_PER_FIGHT = 10
 
 const CHAMPION_BASE_STATS: CombatantStats = { attackSpeed: 1, damage: 20, hp: 200 }
 
 interface LadderSeedEntry {
   baseStats: CombatantStats
   traits: Trait[]
+  experienceValue: number
 }
 
 const LADDER_SEED: LadderSeedEntry[] = [
-  { baseStats: { attackSpeed: 1, damage: 8, hp: 100 }, traits: [{ stat: 'damage', amount: 2 }] },
+  {
+    baseStats: { attackSpeed: 1, damage: 8, hp: 100 },
+    traits: [{ stat: 'damage', amount: 2 }],
+    experienceValue: 10,
+  },
   {
     baseStats: { attackSpeed: 1.1, damage: 10, hp: 120 },
     traits: [{ stat: 'attackSpeed', amount: 0.1 }],
+    experienceValue: 12,
   },
-  { baseStats: { attackSpeed: 1.2, damage: 13, hp: 150 }, traits: [{ stat: 'hp', amount: 20 }] },
-  { baseStats: { attackSpeed: 1.3, damage: 16, hp: 190 }, traits: [{ stat: 'damage', amount: 4 }] },
+  {
+    baseStats: { attackSpeed: 1.2, damage: 13, hp: 150 },
+    traits: [{ stat: 'hp', amount: 20 }],
+    experienceValue: 15,
+  },
+  {
+    baseStats: { attackSpeed: 1.3, damage: 16, hp: 190 },
+    traits: [{ stat: 'damage', amount: 4 }],
+    experienceValue: 18,
+  },
   {
     baseStats: { attackSpeed: 1.4, damage: 20, hp: 240 },
     traits: [{ stat: 'attackSpeed', amount: 0.2 }],
+    experienceValue: 22,
   },
 ]
 
@@ -41,15 +56,20 @@ export type RunStatus = 'active' | 'defeated' | 'victorious'
 interface Combatant {
   baseStats: CombatantStats
   traits: Trait[]
+  experienceValue: number
 }
 
 function createChampion(): Combatant {
-  return reactive({ baseStats: { ...CHAMPION_BASE_STATS }, traits: [] })
+  return reactive({ baseStats: { ...CHAMPION_BASE_STATS }, traits: [], experienceValue: 0 })
 }
 
 function createLadder(): Combatant[] {
   return LADDER_SEED.map((seed) =>
-    reactive({ baseStats: { ...seed.baseStats }, traits: seed.traits.map((trait) => ({ ...trait })) }),
+    reactive({
+      baseStats: { ...seed.baseStats },
+      traits: seed.traits.map((trait) => ({ ...trait })),
+      experienceValue: seed.experienceValue,
+    }),
   )
 }
 
@@ -96,6 +116,8 @@ export const useRunStore = defineStore('run', () => {
     const loser = ladder.value[loserIndex]!
     winner.traits = mergeTraitSets(winner.traits, loser.traits)
     loser.traits = []
+    winner.experienceValue = mergeExperience(winner.experienceValue, loser.experienceValue)
+    loser.experienceValue = 0
   }
 
   function tickEcosystem(elapsedMs: number) {
@@ -141,7 +163,6 @@ export const useRunStore = defineStore('run', () => {
   function resolveFightOutcome(result: FightOutcome) {
     outcome.value = result
     stopTicking()
-    progression.grantExperience(EXPERIENCE_PER_FIGHT)
 
     if (result === 'enemy') {
       runStatus.value = 'defeated'
@@ -149,6 +170,7 @@ export const useRunStore = defineStore('run', () => {
       return
     }
 
+    progression.grantExperience(experienceReward(currentEnemy.value.experienceValue, rungIndex.value))
     champion.traits = mergeTraitSets(champion.traits, currentEnemy.value.traits)
     if (rungIndex.value < ladder.value.length - 1) {
       rungIndex.value += 1

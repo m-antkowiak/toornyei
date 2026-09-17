@@ -3,6 +3,7 @@ import { setActivePinia, createPinia } from 'pinia'
 import { useRunStore } from '../run'
 import { useProgressionStore } from '../progression'
 import { applyTraits } from '@/domain/trait'
+import { experienceReward } from '@/domain/experience'
 
 describe('run store', () => {
   beforeEach(() => {
@@ -224,6 +225,18 @@ describe('run store', () => {
       expect(winnerStats.hp).toBe(store.ladder[1]!.baseStats.hp + 20)
     })
 
+    it('merges experience the same way it merges traits when one enemy defeats another', () => {
+      const store = useRunStore()
+      store.ladder[1]!.baseStats.damage = 1000
+      const winnerXpBefore = store.ladder[1]!.experienceValue
+      const loserXp = store.ladder[2]!.experienceValue
+
+      vi.advanceTimersByTime(1000)
+
+      expect(store.ladder[1]!.experienceValue).toBe(winnerXpBefore + loserXp)
+      expect(store.ladder[2]!.experienceValue).toBe(0)
+    })
+
     it('does not tick the enemy currently engaged by the champion', () => {
       const store = useRunStore()
       const baselineTraits = [...store.ladder[0]!.traits]
@@ -267,22 +280,42 @@ describe('run store', () => {
 
       expect(store.ladder[1]!.traits).toEqual([{ stat: 'attackSpeed', amount: 0.1 }])
     })
+
+    it('wipes ecosystem-earned experience on reset', () => {
+      const store = useRunStore()
+      const baseXp = store.ladder[1]!.experienceValue
+      store.ladder[1]!.baseStats.damage = 1000
+      vi.advanceTimersByTime(1000)
+      expect(store.ladder[1]!.experienceValue).toBeGreaterThan(baseXp)
+
+      store.champion.baseStats.damage = 5
+      store.champion.baseStats.hp = 10
+      store.currentEnemy.baseStats.damage = 1000
+      store.commitToFight()
+      vi.advanceTimersByTime(1000)
+      expect(store.runStatus).toBe('defeated')
+
+      store.reset()
+
+      expect(store.ladder[1]!.experienceValue).toBe(baseXp)
+    })
   })
 
   describe('progression', () => {
-    it('grants permanent experience to the progression store on a champion win', () => {
+    it('grants experience scaled by the defeated enemys value and the rung reached, on a champion win', () => {
       const store = useRunStore()
       const progression = useProgressionStore()
       store.champion.baseStats.damage = 1000
+      const expectedReward = experienceReward(store.currentEnemy.experienceValue, store.rungIndex)
 
       store.commitToFight()
       vi.advanceTimersByTime(1000)
 
       expect(store.outcome).toBe('champion')
-      expect(progression.experience).toBeGreaterThan(0)
+      expect(progression.experience).toBe(expectedReward)
     })
 
-    it('grants permanent experience to the progression store on a champion loss', () => {
+    it('grants no experience on a champion loss', () => {
       const store = useRunStore()
       const progression = useProgressionStore()
       store.champion.baseStats.damage = 5
@@ -293,7 +326,28 @@ describe('run store', () => {
       vi.advanceTimersByTime(1000)
 
       expect(store.outcome).toBe('enemy')
-      expect(progression.experience).toBeGreaterThan(0)
+      expect(progression.experience).toBe(0)
+    })
+
+    it('keeps experience already banked from earlier wins after a later loss ends the run', () => {
+      const store = useRunStore()
+      const progression = useProgressionStore()
+      store.champion.baseStats.damage = 1000
+      store.champion.baseStats.hp = 1000
+
+      store.commitToFight()
+      vi.advanceTimersByTime(1000)
+      const bankedAfterWin = progression.experience
+      expect(bankedAfterWin).toBeGreaterThan(0)
+
+      store.champion.baseStats.damage = 5
+      store.champion.baseStats.hp = 10
+      store.currentEnemy.baseStats.damage = 1000
+      store.commitToFight()
+      vi.advanceTimersByTime(1000)
+
+      expect(store.outcome).toBe('enemy')
+      expect(progression.experience).toBe(bankedAfterWin)
     })
   })
 
