@@ -30,18 +30,18 @@ const progression = useProgressionStore()
 
       <p v-if="run.isFighting" class="status">Fighting...</p>
       <p v-else-if="run.runStatus === 'victorious'" class="status">
-        Run over — you cleared the Ladder!
+        You cleared the Ladder! Prestige to climb again.
       </p>
       <p v-else-if="run.runStatus === 'defeated'" class="status">
-        Run over — your Champion has fallen.
+        Your Champion has fallen. Restarting...
       </p>
       <p v-else-if="run.outcome === 'champion'" class="status">Champion wins!</p>
       <p v-else-if="run.outcome === 'enemy'" class="status">Champion loses.</p>
 
-      <button :disabled="run.isFighting || run.runStatus !== 'active'" @click="run.commitToFight()">
+      <button :disabled="run.isRunning || run.runStatus !== 'active'" @click="run.commitToFight()">
         Commit to Fight
       </button>
-      <button v-if="run.runStatus !== 'active'" @click="run.reset()">Reset</button>
+      <button v-if="run.runStatus === 'victorious'" @click="run.prestige()">Prestige</button>
 
       <h2>Enemy Upgrades</h2>
       <ul class="upgrade-list">

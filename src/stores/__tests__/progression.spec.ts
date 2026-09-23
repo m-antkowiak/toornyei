@@ -88,13 +88,13 @@ describe('progression store', () => {
       expect(store.ladderLevel).toBe(0)
     })
 
-    it('grants exactly one token and one Ladder Level per reset', () => {
+    it('grants exactly one token and one Ladder Level per prestige', () => {
       const store = useProgressionStore()
-      store.didReset()
+      store.didPrestige()
       expect(store.prestigeTokens).toBe(1)
       expect(store.ladderLevel).toBe(1)
 
-      store.didReset()
+      store.didPrestige()
       expect(store.prestigeTokens).toBe(2)
       expect(store.ladderLevel).toBe(2)
     })
@@ -114,7 +114,7 @@ describe('progression store', () => {
 
     it('deducts one token and marks the unlock as unlocked on purchase', () => {
       const store = useProgressionStore()
-      store.didReset()
+      store.didPrestige()
 
       expect(store.didPurchaseMetaUnlock('placeholder')).toBe(true)
       expect(store.prestigeTokens).toBe(0)
@@ -123,8 +123,8 @@ describe('progression store', () => {
 
     it('rejects buying an already unlocked entry without charging a token', () => {
       const store = useProgressionStore()
-      store.didReset()
-      store.didReset()
+      store.didPrestige()
+      store.didPrestige()
       store.didPurchaseMetaUnlock('placeholder')
 
       expect(store.didPurchaseMetaUnlock('placeholder')).toBe(false)
@@ -133,7 +133,7 @@ describe('progression store', () => {
 
     it('rejects an unknown unlock id', () => {
       const store = useProgressionStore()
-      store.didReset()
+      store.didPrestige()
 
       expect(store.didPurchaseMetaUnlock('nope')).toBe(false)
       expect(store.prestigeTokens).toBe(1)
@@ -142,8 +142,8 @@ describe('progression store', () => {
   describe('persistence', () => {
     it('rehydrates tokens, Ladder Level and unlocks after a simulated reload', () => {
       const first = useProgressionStore()
-      first.didReset()
-      first.didReset()
+      first.didPrestige()
+      first.didPrestige()
       first.didPurchaseMetaUnlock('placeholder')
 
       setActivePinia(createPinia())
@@ -158,7 +158,7 @@ describe('progression store', () => {
       const first = useProgressionStore()
       first.grantGold(50)
       first.grantExperience(50)
-      first.didReset()
+      first.didPrestige()
 
       setActivePinia(createPinia())
       const reloaded = useProgressionStore()

@@ -7,6 +7,23 @@ import { experienceReward } from '@/domain/experience'
 import { goldReward } from '@/domain/gold'
 import { createFight, advanceFight } from '@/domain/fight'
 
+const FIGHT_COOLDOWN_MS = 1000
+
+function loseRun(store: ReturnType<typeof useRunStore>) {
+  store.champion.baseStats.damage = 5
+  store.champion.baseStats.hp = 10
+  store.currentEnemy.baseStats.damage = 1000
+  store.commitToFight()
+  vi.advanceTimersByTime(1000)
+}
+
+function winWholeLadder(store: ReturnType<typeof useRunStore>) {
+  store.champion.baseStats.damage = 1000
+  store.champion.baseStats.hp = 1000
+  store.commitToFight()
+  vi.advanceTimersByTime(store.ladder.length * (1000 + FIGHT_COOLDOWN_MS))
+}
+
 describe('run store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -24,7 +41,7 @@ describe('run store', () => {
     store.currentEnemy.baseStats.hp = 40
 
     store.commitToFight()
-    vi.advanceTimersByTime(3000)
+    vi.advanceTimersByTime(2500)
 
     expect(store.outcome).toBe('champion')
     expect(store.isFighting).toBe(false)
@@ -37,7 +54,7 @@ describe('run store', () => {
     store.currentEnemy.baseStats.damage = 20
 
     store.commitToFight()
-    vi.advanceTimersByTime(3000)
+    vi.advanceTimersByTime(2500)
 
     expect(store.outcome).toBe('enemy')
     expect(store.isFighting).toBe(false)
@@ -69,7 +86,7 @@ describe('run store', () => {
     expect(store.outcome).toBe('champion')
     const enemyHpAfterWin = store.enemyHp
 
-    vi.advanceTimersByTime(5000)
+    vi.advanceTimersByTime(500)
     expect(store.enemyHp).toBe(enemyHpAfterWin)
   })
 
@@ -163,31 +180,23 @@ describe('run store', () => {
       store.ladder[1]!.traits = [{ stat: 'damage', amount: 4 }]
 
       store.commitToFight()
-      vi.advanceTimersByTime(1000)
-      store.commitToFight()
-      vi.advanceTimersByTime(1000)
+      vi.advanceTimersByTime(1000 + FIGHT_COOLDOWN_MS + 1000)
 
       expect(store.champion.traits).toEqual([{ stat: 'damage', amount: 6 }])
     })
   })
 
   describe('run status', () => {
-    it('ends the run in defeat on a champion loss and refuses further fights', () => {
+    it('shows the run as defeated on a champion loss and refuses a new fight during the cooldown', () => {
       const store = useRunStore()
-      store.champion.baseStats.damage = 5
-      store.champion.baseStats.hp = 10
-      store.currentEnemy.baseStats.damage = 1000
 
-      store.commitToFight()
-      vi.advanceTimersByTime(1000)
+      loseRun(store)
 
       expect(store.outcome).toBe('enemy')
       expect(store.runStatus).toBe('defeated')
 
-      const rungBefore = store.rungIndex
       store.commitToFight()
       expect(store.isFighting).toBe(false)
-      expect(store.rungIndex).toBe(rungBefore)
     })
 
     it('ends the run in victory on clearing the final rung', () => {
@@ -195,11 +204,8 @@ describe('run store', () => {
       store.champion.baseStats.damage = 1000
       store.champion.baseStats.hp = 1000
 
-      const rungCount = store.ladder.length
-      for (let index = 0; index < rungCount; index++) {
-        store.commitToFight()
-        vi.advanceTimersByTime(1000)
-      }
+      store.commitToFight()
+      vi.advanceTimersByTime(store.ladder.length * (1000 + FIGHT_COOLDOWN_MS))
 
       expect(store.outcome).toBe('champion')
       expect(store.runStatus).toBe('victorious')
@@ -248,13 +254,7 @@ describe('run store', () => {
 
     it('stops ticking once the run has concluded', () => {
       const store = useRunStore()
-      store.champion.baseStats.damage = 1000
-      store.champion.baseStats.hp = 1000
-
-      for (let index = 0; index < store.ladder.length; index++) {
-        store.commitToFight()
-        vi.advanceTimersByTime(1000)
-      }
+      winWholeLadder(store)
       expect(store.runStatus).toBe('victorious')
 
       const traitsAfterVictory = [...store.ladder[4]!.traits]
@@ -263,39 +263,31 @@ describe('run store', () => {
       expect(store.ladder[4]!.traits).toEqual(traitsAfterVictory)
     })
 
-    it('wipes ecosystem-earned traits on reset', () => {
+    it('wipes ecosystem-earned traits on restart', () => {
       const store = useRunStore()
       store.ladder[1]!.baseStats.damage = 1000
       vi.advanceTimersByTime(1000)
       expect(store.ladder[1]!.traits.length).toBeGreaterThan(1)
 
-      store.champion.baseStats.damage = 5
-      store.champion.baseStats.hp = 10
-      store.currentEnemy.baseStats.damage = 1000
-      store.commitToFight()
-      vi.advanceTimersByTime(1000)
+      loseRun(store)
       expect(store.runStatus).toBe('defeated')
 
-      store.reset()
+      vi.advanceTimersByTime(FIGHT_COOLDOWN_MS)
 
       expect(store.ladder[1]!.traits).toEqual([{ stat: 'attackSpeed', amount: 0.1 }])
     })
 
-    it('wipes ecosystem-earned experience on reset', () => {
+    it('wipes ecosystem-earned experience on restart', () => {
       const store = useRunStore()
       const baseXp = store.ladder[1]!.experienceValue
       store.ladder[1]!.baseStats.damage = 1000
       vi.advanceTimersByTime(1000)
       expect(store.ladder[1]!.experienceValue).toBeGreaterThan(baseXp)
 
-      store.champion.baseStats.damage = 5
-      store.champion.baseStats.hp = 10
-      store.currentEnemy.baseStats.damage = 1000
-      store.commitToFight()
-      vi.advanceTimersByTime(1000)
+      loseRun(store)
       expect(store.runStatus).toBe('defeated')
 
-      store.reset()
+      vi.advanceTimersByTime(FIGHT_COOLDOWN_MS)
 
       expect(store.ladder[1]!.experienceValue).toBe(baseXp)
     })
@@ -343,8 +335,7 @@ describe('run store', () => {
       store.champion.baseStats.damage = 5
       store.champion.baseStats.hp = 10
       store.currentEnemy.baseStats.damage = 1000
-      store.commitToFight()
-      vi.advanceTimersByTime(1000)
+      vi.advanceTimersByTime(FIGHT_COOLDOWN_MS + 1000)
 
       expect(store.outcome).toBe('enemy')
       expect(progression.experience).toBe(bankedAfterWin)
@@ -443,7 +434,7 @@ describe('run store', () => {
       expect(10_000 - rematch.champion.currentHp).toBeCloseTo(statsAfterUpgrade.damage)
     })
 
-    it('persists Gold and a purchased Enemy Upgrade across a reset', () => {
+    it('persists Gold and a purchased Enemy Upgrade across a restart', () => {
       const store = useRunStore()
       const progression = useProgressionStore()
       store.champion.baseStats.damage = 1000
@@ -461,58 +452,75 @@ describe('run store', () => {
       store.champion.baseStats.damage = 5
       store.champion.baseStats.hp = 10
       store.currentEnemy.baseStats.damage = 1000
-      store.commitToFight()
-      vi.advanceTimersByTime(1000)
+      vi.advanceTimersByTime(FIGHT_COOLDOWN_MS + 1000)
       expect(store.runStatus).toBe('defeated')
 
-      store.reset()
+      vi.advanceTimersByTime(FIGHT_COOLDOWN_MS)
 
       expect(progression.gold).toBe(goldAfterPurchase)
-      expect(store.ladder[index]!.baseStats.damage).toBeCloseTo(upgradedDamage * 1.15)
+      expect(store.ladder[index]!.baseStats.damage).toBe(upgradedDamage)
 
       progression.gold = store.upgradeCostOf(index)
       expect(store.didPurchaseEnemyUpgrade(index)).toBe(true)
     })
   })
 
-  describe('reset', () => {
-    it('restores champion stats, traits, ladder position, and run status after a defeat', () => {
+  describe('automatic fight chaining', () => {
+    it('starts the next rungs fight on its own once the cooldown after a win elapses', () => {
       const store = useRunStore()
-      store.champion.baseStats.damage = 5
-      store.champion.baseStats.hp = 10
-      store.currentEnemy.baseStats.damage = 1000
+      store.champion.baseStats.damage = 1000
+      store.champion.baseStats.hp = 1000
 
       store.commitToFight()
       vi.advanceTimersByTime(1000)
-      expect(store.runStatus).toBe('defeated')
+      expect(store.outcome).toBe('champion')
+      expect(store.isFighting).toBe(false)
 
-      store.reset()
+      vi.advanceTimersByTime(FIGHT_COOLDOWN_MS)
+
+      expect(store.isFighting).toBe(true)
+      expect(store.rungIndex).toBe(1)
+    })
+
+    it('ignores committing again while a run is in progress', () => {
+      const store = useRunStore()
+      store.champion.baseStats.damage = 1000
+      store.champion.baseStats.hp = 1000
+
+      store.commitToFight()
+      vi.advanceTimersByTime(1000)
+      store.commitToFight()
+
+      expect(store.isFighting).toBe(false)
+      expect(store.rungIndex).toBe(1)
+    })
+  })
+
+  describe('restart after defeat', () => {
+    it('automatically returns to the start of the ladder with a fresh champion, granting nothing', () => {
+      const store = useRunStore()
+      const progression = useProgressionStore()
+
+      loseRun(store)
+      expect(store.runStatus).toBe('defeated')
+      vi.advanceTimersByTime(FIGHT_COOLDOWN_MS)
 
       expect(store.runStatus).toBe('active')
       expect(store.rungIndex).toBe(0)
       expect(store.champion.traits).toEqual([])
       expect(store.champion.baseStats).toEqual({ attackSpeed: 1, damage: 20, hp: 200 })
       expect(store.outcome).toBeUndefined()
+      expect(progression.prestigeTokens).toBe(0)
+      expect(progression.ladderLevel).toBe(0)
     })
 
-    it('does nothing while the run is still active', () => {
+    it('waits for the player to commit before fighting again', () => {
       const store = useRunStore()
-      store.champion.baseStats.damage = 999
 
-      store.reset()
+      loseRun(store)
+      vi.advanceTimersByTime(FIGHT_COOLDOWN_MS + 5000)
 
-      expect(store.champion.baseStats.damage).toBe(999)
-    })
-
-    it('allows committing to a fresh fight after a reset', () => {
-      const store = useRunStore()
-      store.champion.baseStats.damage = 5
-      store.champion.baseStats.hp = 10
-      store.currentEnemy.baseStats.damage = 1000
-
-      store.commitToFight()
-      vi.advanceTimersByTime(1000)
-      store.reset()
+      expect(store.isFighting).toBe(false)
 
       store.champion.baseStats.damage = 1000
       store.commitToFight()
@@ -520,42 +528,60 @@ describe('run store', () => {
 
       expect(store.outcome).toBe('champion')
     })
-  })
-  describe('ladder level', () => {
-    function loseRunAndReset(store: ReturnType<typeof useRunStore>) {
-      store.champion.baseStats.damage = 5
-      store.champion.baseStats.hp = 10
-      store.currentEnemy.baseStats.damage = 1000
-      store.commitToFight()
-      vi.advanceTimersByTime(1000)
-      expect(store.runStatus).toBe('defeated')
-      store.reset()
-    }
 
-    it('grants one prestige token and one Ladder Level on reset', () => {
+    it('leaves Ladder difficulty unchanged', () => {
       const store = useRunStore()
-      const progression = useProgressionStore()
 
-      loseRunAndReset(store)
+      loseRun(store)
+      vi.advanceTimersByTime(FIGHT_COOLDOWN_MS)
 
-      expect(progression.prestigeTokens).toBe(1)
-      expect(progression.ladderLevel).toBe(1)
+      expect(store.ladder[0]!.baseStats.damage).toBe(8)
+      expect(store.ladder[0]!.baseStats.hp).toBe(100)
     })
+  })
 
-    it('grants nothing when reset is refused because the run is still active', () => {
+  describe('prestige', () => {
+    it('is refused while the run is still active', () => {
       const store = useRunStore()
       const progression = useProgressionStore()
 
-      store.reset()
+      store.prestige()
 
       expect(progression.prestigeTokens).toBe(0)
       expect(progression.ladderLevel).toBe(0)
     })
 
-    it('raises every enemys damage and hp on the fresh ladder after a reset', () => {
+    it('is refused after a defeat', () => {
       const store = useRunStore()
+      const progression = useProgressionStore()
 
-      loseRunAndReset(store)
+      loseRun(store)
+      store.prestige()
+
+      expect(progression.prestigeTokens).toBe(0)
+      expect(progression.ladderLevel).toBe(0)
+    })
+
+    it('grants one prestige token and one Ladder Level after the final rung is cleared, and restarts the run', () => {
+      const store = useRunStore()
+      const progression = useProgressionStore()
+      winWholeLadder(store)
+      expect(store.runStatus).toBe('victorious')
+
+      store.prestige()
+
+      expect(progression.prestigeTokens).toBe(1)
+      expect(progression.ladderLevel).toBe(1)
+      expect(store.runStatus).toBe('active')
+      expect(store.rungIndex).toBe(0)
+      expect(store.champion.traits).toEqual([])
+    })
+
+    it('raises every enemys damage and hp on the fresh ladder', () => {
+      const store = useRunStore()
+      winWholeLadder(store)
+
+      store.prestige()
 
       expect(store.ladder[0]!.baseStats.damage).toBeCloseTo(9.2)
       expect(store.ladder[0]!.baseStats.hp).toBeCloseTo(115)
@@ -566,18 +592,11 @@ describe('run store', () => {
     it('stacks the Ladder Level multiplier on top of a purchased Enemy Upgrade', () => {
       const store = useRunStore()
       const progression = useProgressionStore()
-      store.champion.baseStats.damage = 1000
-      store.commitToFight()
-      vi.advanceTimersByTime(1000)
+      winWholeLadder(store)
       progression.gold = store.upgradeCostOf(0)
       expect(store.didPurchaseEnemyUpgrade(0)).toBe(true)
 
-      store.champion.baseStats.damage = 5
-      store.champion.baseStats.hp = 10
-      store.currentEnemy.baseStats.damage = 1000
-      store.commitToFight()
-      vi.advanceTimersByTime(1000)
-      store.reset()
+      store.prestige()
 
       expect(store.ladder[0]!.baseStats.damage).toBeCloseTo(8 * 1.15 * 1.15)
     })
@@ -585,8 +604,10 @@ describe('run store', () => {
     it('feeds Ladder Level into the displayed and granted rewards', () => {
       const store = useRunStore()
       const progression = useProgressionStore()
-
-      loseRunAndReset(store)
+      winWholeLadder(store)
+      store.prestige()
+      const experienceBefore = progression.experience
+      const goldBefore = progression.gold
 
       expect(store.currentEnemyRewards).toEqual({ experience: 20, gold: 30 })
 
@@ -595,8 +616,8 @@ describe('run store', () => {
       vi.advanceTimersByTime(1000)
 
       expect(store.outcome).toBe('champion')
-      expect(progression.experience).toBe(20)
-      expect(progression.gold).toBe(30)
+      expect(progression.experience - experienceBefore).toBe(20)
+      expect(progression.gold - goldBefore).toBe(30)
     })
   })
 })

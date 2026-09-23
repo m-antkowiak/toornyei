@@ -18,6 +18,7 @@ import { LADDER_SEED } from '@/domain/ladder'
 import { useProgressionStore, type EnemyProgress } from '@/stores/progression'
 
 const TICK_INTERVAL_MS = 20
+const FIGHT_COOLDOWN_MS = 1000
 
 const CHAMPION_BASE_STATS: CombatantStats = { attackSpeed: 1, damage: 20, hp: 200 }
 
@@ -64,6 +65,8 @@ export const useRunStore = defineStore('run', () => {
   const fight = ref<FightState | undefined>(undefined)
   const outcome = ref<FightOutcome | undefined>(undefined)
 
+  const isRunning = ref(false)
+  let cooldownRemainingMs = 0
   let intervalId: ReturnType<typeof setInterval> | undefined
   let lastTickAt = 0
 
@@ -88,6 +91,7 @@ export const useRunStore = defineStore('run', () => {
     if (intervalId === undefined) return
     clearInterval(intervalId)
     intervalId = undefined
+    isRunning.value = false
   }
 
   function resolveEcosystemFight(a: number, b: number, result: FightOutcome) {
@@ -145,11 +149,11 @@ export const useRunStore = defineStore('run', () => {
 
   function resolveFightOutcome(result: FightOutcome) {
     outcome.value = result
-    stopTicking()
 
     if (result === 'enemy') {
       runStatus.value = 'defeated'
       stopEcosystemTicking()
+      cooldownRemainingMs = FIGHT_COOLDOWN_MS
       return
     }
 
@@ -160,17 +164,42 @@ export const useRunStore = defineStore('run', () => {
     champion.traits = mergeTraitSets(champion.traits, defeatedEnemy.traits)
     if (rungIndex.value < ladder.value.length - 1) {
       rungIndex.value += 1
+      cooldownRemainingMs = FIGHT_COOLDOWN_MS
     } else {
       runStatus.value = 'victorious'
+      stopTicking()
       stopEcosystemTicking()
     }
   }
 
+  function beginFight() {
+    outcome.value = undefined
+    fight.value = createFight(championStats.value, currentEnemyStats.value)
+  }
+
+  function finishCooldown() {
+    if (runStatus.value === 'defeated') {
+      restart()
+      return
+    }
+    beginFight()
+  }
+
   function tick() {
-    if (!fight.value) return
     const now = Date.now()
     const elapsedMs = now - lastTickAt
     lastTickAt = now
+
+    if (cooldownRemainingMs > 0) {
+      cooldownRemainingMs -= elapsedMs
+      if (cooldownRemainingMs <= 0) {
+        cooldownRemainingMs = 0
+        finishCooldown()
+      }
+      return
+    }
+
+    if (!fight.value) return
     advanceFight(fight.value, elapsedMs)
     if (fight.value.outcome !== undefined) {
       resolveFightOutcome(fight.value.outcome)
@@ -178,19 +207,17 @@ export const useRunStore = defineStore('run', () => {
   }
 
   function commitToFight() {
-    if (runStatus.value !== 'active') return
-    if (fight.value !== undefined && fight.value.outcome === undefined) return
-    outcome.value = undefined
-    fight.value = createFight(championStats.value, currentEnemyStats.value)
+    if (runStatus.value !== 'active' || isRunning.value) return
+    beginFight()
     lastTickAt = Date.now()
     stopTicking()
+    isRunning.value = true
     intervalId = setInterval(tick, TICK_INTERVAL_MS)
   }
 
-  function reset() {
-    if (runStatus.value === 'active') return
+  function restart() {
     stopTicking()
-    progression.didReset()
+    cooldownRemainingMs = 0
     ecosystemFights.clear()
     Object.assign(champion, createChampion())
     ladder.value = createLadder(progression.enemyProgress, progression.ladderLevel)
@@ -199,6 +226,12 @@ export const useRunStore = defineStore('run', () => {
     fight.value = undefined
     outcome.value = undefined
     startEcosystemTicking()
+  }
+
+  function prestige() {
+    if (runStatus.value !== 'victorious') return
+    progression.didPrestige()
+    restart()
   }
 
   function upgradeCostOf(index: number): number {
@@ -246,10 +279,11 @@ export const useRunStore = defineStore('run', () => {
     championHp,
     enemyHp,
     isFighting,
+    isRunning,
     championAttackProgress,
     enemyAttackProgress,
     commitToFight,
-    reset,
+    prestige,
     upgradeCostOf,
     didPurchaseEnemyUpgrade,
   }

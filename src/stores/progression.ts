@@ -95,7 +95,7 @@ export const useProgressionStore = defineStore('progression', () => {
     gold.value += amount
   }
 
-  function didReset() {
+  function didPrestige() {
     prestigeTokens.value += 1
     ladderLevel.value += 1
   }
@@ -144,7 +144,7 @@ export const useProgressionStore = defineStore('progression', () => {
     enemyProgress,
     grantExperience,
     grantGold,
-    didReset,
+    didPrestige,
     didPurchaseMetaUnlock,
     recordEnemyDefeat,
     upgradeCostOf,
