@@ -2,10 +2,17 @@
 import { useRunStore } from '@/stores/run'
 import { useProgressionStore } from '@/stores/progression'
 import { formatNumber } from '@/domain/format'
+import { CHAMPION_UPGRADE_KINDS, type ChampionUpgradeKind } from '@/domain/championUpgrade'
 
 const run = useRunStore()
 const progression = useProgressionStore()
 const isDev = import.meta.env.DEV
+
+const championUpgradeLabels: Record<ChampionUpgradeKind, string> = {
+  damage: 'Damage',
+  attackSpeed: 'Attack Speed',
+  hp: 'HP',
+}
 
 function hardReset() {
   progression.hardReset()
@@ -56,15 +63,15 @@ function hardReset() {
       </button>
       <button v-if="run.runStatus === 'victorious'" @click="run.prestige()">Prestige</button>
 
-      <h2>Enemy Upgrades</h2>
+      <h2>Champion Upgrades</h2>
       <ul class="upgrade-list">
-        <li v-for="(enemy, index) in progression.enemyProgress" :key="index" class="upgrade-row">
-          <span>Rung {{ index + 1 }}</span>
+        <li v-for="kind in CHAMPION_UPGRADE_KINDS" :key="kind" class="upgrade-row">
+          <span>{{ championUpgradeLabels[kind] }} (Lv {{ progression.championUpgrades[kind] }})</span>
           <button
-            :disabled="!enemy.defeated || progression.gold < run.upgradeCostOf(index)"
-            @click="run.didPurchaseEnemyUpgrade(index)"
+            :disabled="progression.experience < progression.championUpgradeCostOf(kind)"
+            @click="progression.didPurchaseChampionUpgrade(kind)"
           >
-            Upgrade ({{ run.upgradeCostOf(index) }}g)
+            Upgrade ({{ progression.championUpgradeCostOf(kind) }} exp)
           </button>
         </li>
       </ul>

@@ -3,6 +3,11 @@ import { defineStore, acceptHMRUpdate } from 'pinia'
 import type { CombatantStats } from '@/domain/fight'
 import { LADDER_SEED } from '@/domain/ladder'
 import { upgradeCost, upgradeStats, upgradeReward } from '@/domain/upgrade'
+import {
+  championUpgradeCost,
+  createChampionUpgradeLevels,
+  type ChampionUpgradeKind,
+} from '@/domain/championUpgrade'
 
 export interface MetaUnlock {
   id: string
@@ -65,6 +70,7 @@ function createEnemyProgress(): EnemyProgress[] {
 export const useProgressionStore = defineStore('progression', () => {
   const experience = ref(0)
   const gold = ref(0)
+  const championUpgrades = ref(createChampionUpgradeLevels())
   const persistedMeta = loadPersistedMeta()
   const prestigeTokens = ref(persistedMeta?.prestigeTokens ?? 0)
   const ladderLevel = ref(persistedMeta?.ladderLevel ?? 0)
@@ -98,6 +104,8 @@ export const useProgressionStore = defineStore('progression', () => {
   function didPrestige() {
     prestigeTokens.value += 1
     ladderLevel.value += 1
+    experience.value = 0
+    championUpgrades.value = createChampionUpgradeLevels()
   }
 
   function didPurchaseMetaUnlock(id: string): boolean {
@@ -113,6 +121,7 @@ export const useProgressionStore = defineStore('progression', () => {
   function hardReset() {
     experience.value = 0
     gold.value = 0
+    championUpgrades.value = createChampionUpgradeLevels()
     prestigeTokens.value = 0
     ladderLevel.value = 0
     metaUnlocks.value = META_UNLOCK_IDS.map((id) => ({ id, unlocked: false }))
@@ -122,6 +131,19 @@ export const useProgressionStore = defineStore('progression', () => {
   function recordEnemyDefeat(index: number) {
     const enemy = enemyProgress.value[index]
     if (enemy) enemy.defeated = true
+  }
+
+  function championUpgradeCostOf(kind: ChampionUpgradeKind): number {
+    return championUpgradeCost(kind, championUpgrades.value[kind])
+  }
+
+  function didPurchaseChampionUpgrade(kind: ChampionUpgradeKind): boolean {
+    const cost = championUpgradeCostOf(kind)
+    if (experience.value < cost) return false
+
+    experience.value -= cost
+    championUpgrades.value[kind] += 1
+    return true
   }
 
   function upgradeCostOf(index: number): number {
@@ -147,6 +169,7 @@ export const useProgressionStore = defineStore('progression', () => {
   return {
     experience,
     gold,
+    championUpgrades,
     prestigeTokens,
     ladderLevel,
     metaUnlocks,
@@ -159,6 +182,8 @@ export const useProgressionStore = defineStore('progression', () => {
     recordEnemyDefeat,
     upgradeCostOf,
     didPurchaseEnemyUpgrade,
+    championUpgradeCostOf,
+    didPurchaseChampionUpgrade,
   }
 })
 

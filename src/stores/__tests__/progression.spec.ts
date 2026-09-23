@@ -176,6 +176,46 @@ describe('progression store', () => {
       expect(store.ladderLevel).toBe(0)
     })
   })
+  describe('champion upgrades', () => {
+    it('rejects a purchase when experience is insufficient', () => {
+      const store = useProgressionStore()
+      store.grantExperience(store.championUpgradeCostOf('damage') - 1)
+
+      expect(store.didPurchaseChampionUpgrade('damage')).toBe(false)
+      expect(store.championUpgrades.damage).toBe(0)
+    })
+
+    it('spends experience and raises only the purchased level', () => {
+      const store = useProgressionStore()
+      const cost = store.championUpgradeCostOf('hp')
+      store.grantExperience(cost + 5)
+
+      expect(store.didPurchaseChampionUpgrade('hp')).toBe(true)
+      expect(store.experience).toBe(5)
+      expect(store.championUpgrades).toEqual({ damage: 0, attackSpeed: 0, hp: 1 })
+    })
+
+    it('raises the cost of the next level of the same upgrade', () => {
+      const store = useProgressionStore()
+      const firstCost = store.championUpgradeCostOf('damage')
+      store.grantExperience(firstCost)
+      store.didPurchaseChampionUpgrade('damage')
+
+      expect(store.championUpgradeCostOf('damage')).toBeGreaterThan(firstCost)
+    })
+
+    it('clears experience and upgrade levels on prestige', () => {
+      const store = useProgressionStore()
+      store.grantExperience(100)
+      store.didPurchaseChampionUpgrade('damage')
+
+      store.didPrestige()
+
+      expect(store.experience).toBe(0)
+      expect(store.championUpgrades).toEqual({ damage: 0, attackSpeed: 0, hp: 0 })
+    })
+  })
+
   describe('hard reset', () => {
     it('wipes every progression value and the persisted data', () => {
       const store = useProgressionStore()
@@ -189,6 +229,7 @@ describe('progression store', () => {
 
       expect(store.gold).toBe(0)
       expect(store.experience).toBe(0)
+      expect(store.championUpgrades).toEqual({ damage: 0, attackSpeed: 0, hp: 0 })
       expect(store.prestigeTokens).toBe(0)
       expect(store.ladderLevel).toBe(0)
       expect(store.metaUnlocks).toEqual([{ id: 'placeholder', unlocked: false }])

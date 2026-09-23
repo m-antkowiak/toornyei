@@ -13,6 +13,7 @@ import { pairUpcomingCombatants } from '@/domain/ecosystem'
 import { mergeExperience, experienceReward } from '@/domain/experience'
 import { mergeGold, goldReward } from '@/domain/gold'
 import { upgradeStats, upgradeReward } from '@/domain/upgrade'
+import { applyChampionUpgrades } from '@/domain/championUpgrade'
 import { ladderLevelStats } from '@/domain/ladderLevel'
 import { LADDER_SEED } from '@/domain/ladder'
 import { useProgressionStore, type EnemyProgress } from '@/stores/progression'
@@ -78,7 +79,9 @@ export const useRunStore = defineStore('run', () => {
     return computed(() => combatantStats(getCombatant()))
   }
 
-  const championStats = statsOf(() => champion)
+  const championStats = computed(() =>
+    applyChampionUpgrades(combatantStats(champion), progression.championUpgrades),
+  )
   const currentEnemy = computed(() => ladder.value[rungIndex.value]!)
   const currentEnemyStats = statsOf(() => currentEnemy.value)
   const rewardLevel = computed(() => rungIndex.value + progression.ladderLevel)
