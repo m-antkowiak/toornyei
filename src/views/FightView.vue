@@ -29,8 +29,12 @@ const progression = useProgressionStore()
       </ol>
 
       <p v-if="run.isFighting" class="status">Fighting...</p>
-      <p v-else-if="run.runStatus === 'victorious'" class="status">Run over — you cleared the Ladder!</p>
-      <p v-else-if="run.runStatus === 'defeated'" class="status">Run over — your Champion has fallen.</p>
+      <p v-else-if="run.runStatus === 'victorious'" class="status">
+        Run over — you cleared the Ladder!
+      </p>
+      <p v-else-if="run.runStatus === 'defeated'" class="status">
+        Run over — your Champion has fallen.
+      </p>
       <p v-else-if="run.outcome === 'champion'" class="status">Champion wins!</p>
       <p v-else-if="run.outcome === 'enemy'" class="status">Champion loses.</p>
 
@@ -51,6 +55,21 @@ const progression = useProgressionStore()
           </button>
         </li>
       </ul>
+
+      <h2>Meta Unlocks</h2>
+      <ul class="upgrade-list">
+        <li v-for="unlock in progression.metaUnlocks" :key="unlock.id" class="upgrade-row">
+          <span>{{ unlock.id }}</span>
+          <span v-if="unlock.unlocked">Unlocked</span>
+          <button
+            v-else
+            :disabled="progression.prestigeTokens < 1"
+            @click="progression.didPurchaseMetaUnlock(unlock.id)"
+          >
+            Unlock (1 token)
+          </button>
+        </li>
+      </ul>
     </section>
 
     <aside class="stat-rail">
@@ -64,6 +83,14 @@ const progression = useProgressionStore()
           <span>Gold</span>
           <span class="value">{{ formatNumber(progression.gold) }}</span>
         </div>
+        <div class="stat-row">
+          <span>Prestige Tokens</span>
+          <span class="value">{{ formatNumber(progression.prestigeTokens) }}</span>
+        </div>
+        <div class="stat-row">
+          <span>Ladder Level</span>
+          <span class="value">{{ formatNumber(progression.ladderLevel) }}</span>
+        </div>
       </section>
 
       <section class="panel">
@@ -71,9 +98,14 @@ const progression = useProgressionStore()
         <div class="stat-row">
           <span>HP</span>
           <div class="bar">
-            <div class="fill" :style="{ width: (run.championHp / run.championStats.hp) * 100 + '%' }" />
+            <div
+              class="fill"
+              :style="{ width: (run.championHp / run.championStats.hp) * 100 + '%' }"
+            />
           </div>
-          <span class="value">{{ formatNumber(run.championHp) }}/{{ formatNumber(run.championStats.hp) }}</span>
+          <span class="value"
+            >{{ formatNumber(run.championHp) }}/{{ formatNumber(run.championStats.hp) }}</span
+          >
         </div>
         <div class="stat-row">
           <span>Damage</span>
@@ -90,7 +122,9 @@ const progression = useProgressionStore()
           </div>
         </div>
         <div v-if="run.champion.traits.length > 0" class="traits">
-          <span v-for="trait in run.champion.traits" :key="trait.stat">{{ trait.stat }} +{{ trait.amount }}</span>
+          <span v-for="trait in run.champion.traits" :key="trait.stat"
+            >{{ trait.stat }} +{{ trait.amount }}</span
+          >
         </div>
       </section>
 
@@ -99,9 +133,14 @@ const progression = useProgressionStore()
         <div class="stat-row">
           <span>HP</span>
           <div class="bar">
-            <div class="fill" :style="{ width: (run.enemyHp / run.currentEnemyStats.hp) * 100 + '%' }" />
+            <div
+              class="fill"
+              :style="{ width: (run.enemyHp / run.currentEnemyStats.hp) * 100 + '%' }"
+            />
           </div>
-          <span class="value">{{ formatNumber(run.enemyHp) }}/{{ formatNumber(run.currentEnemyStats.hp) }}</span>
+          <span class="value"
+            >{{ formatNumber(run.enemyHp) }}/{{ formatNumber(run.currentEnemyStats.hp) }}</span
+          >
         </div>
         <div class="stat-row">
           <span>Damage</span>
@@ -118,7 +157,9 @@ const progression = useProgressionStore()
           </div>
         </div>
         <div v-if="run.currentEnemy.traits.length > 0" class="traits">
-          <span v-for="trait in run.currentEnemy.traits" :key="trait.stat">{{ trait.stat }} +{{ trait.amount }}</span>
+          <span v-for="trait in run.currentEnemy.traits" :key="trait.stat"
+            >{{ trait.stat }} +{{ trait.amount }}</span
+          >
         </div>
         <div class="traits">
           <span>exp +{{ run.currentEnemyRewards.experience }}</span>

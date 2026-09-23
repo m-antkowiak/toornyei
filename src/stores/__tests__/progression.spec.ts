@@ -81,4 +81,99 @@ describe('progression store', () => {
       expect(store.upgradeCostOf(0)).toBeGreaterThan(firstCost)
     })
   })
+  describe('prestige', () => {
+    it('starts with no prestige tokens and Ladder Level zero', () => {
+      const store = useProgressionStore()
+      expect(store.prestigeTokens).toBe(0)
+      expect(store.ladderLevel).toBe(0)
+    })
+
+    it('grants exactly one token and one Ladder Level per reset', () => {
+      const store = useProgressionStore()
+      store.didReset()
+      expect(store.prestigeTokens).toBe(1)
+      expect(store.ladderLevel).toBe(1)
+
+      store.didReset()
+      expect(store.prestigeTokens).toBe(2)
+      expect(store.ladderLevel).toBe(2)
+    })
+  })
+  describe('meta unlocks', () => {
+    it('lists a single placeholder unlock, initially locked', () => {
+      const store = useProgressionStore()
+      expect(store.metaUnlocks).toEqual([{ id: 'placeholder', unlocked: false }])
+    })
+
+    it('rejects a purchase when the token balance is insufficient', () => {
+      const store = useProgressionStore()
+
+      expect(store.didPurchaseMetaUnlock('placeholder')).toBe(false)
+      expect(store.metaUnlocks[0]!.unlocked).toBe(false)
+    })
+
+    it('deducts one token and marks the unlock as unlocked on purchase', () => {
+      const store = useProgressionStore()
+      store.didReset()
+
+      expect(store.didPurchaseMetaUnlock('placeholder')).toBe(true)
+      expect(store.prestigeTokens).toBe(0)
+      expect(store.metaUnlocks[0]!.unlocked).toBe(true)
+    })
+
+    it('rejects buying an already unlocked entry without charging a token', () => {
+      const store = useProgressionStore()
+      store.didReset()
+      store.didReset()
+      store.didPurchaseMetaUnlock('placeholder')
+
+      expect(store.didPurchaseMetaUnlock('placeholder')).toBe(false)
+      expect(store.prestigeTokens).toBe(1)
+    })
+
+    it('rejects an unknown unlock id', () => {
+      const store = useProgressionStore()
+      store.didReset()
+
+      expect(store.didPurchaseMetaUnlock('nope')).toBe(false)
+      expect(store.prestigeTokens).toBe(1)
+    })
+  })
+  describe('persistence', () => {
+    it('rehydrates tokens, Ladder Level and unlocks after a simulated reload', () => {
+      const first = useProgressionStore()
+      first.didReset()
+      first.didReset()
+      first.didPurchaseMetaUnlock('placeholder')
+
+      setActivePinia(createPinia())
+      const reloaded = useProgressionStore()
+
+      expect(reloaded.prestigeTokens).toBe(1)
+      expect(reloaded.ladderLevel).toBe(2)
+      expect(reloaded.metaUnlocks).toEqual([{ id: 'placeholder', unlocked: true }])
+    })
+
+    it('leaves gold and experience in memory only', () => {
+      const first = useProgressionStore()
+      first.grantGold(50)
+      first.grantExperience(50)
+      first.didReset()
+
+      setActivePinia(createPinia())
+      const reloaded = useProgressionStore()
+
+      expect(reloaded.gold).toBe(0)
+      expect(reloaded.experience).toBe(0)
+    })
+
+    it('starts fresh when the stored data is corrupt', () => {
+      localStorage.setItem('toornyei:meta', 'not json')
+
+      const store = useProgressionStore()
+
+      expect(store.prestigeTokens).toBe(0)
+      expect(store.ladderLevel).toBe(0)
+    })
+  })
 })
