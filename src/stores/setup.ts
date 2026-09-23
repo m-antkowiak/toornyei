@@ -1,9 +1,10 @@
 import { ref, computed, watch } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { findEnemyType, createBracketCombatant } from '@/domain/catalog'
-import type { BracketCombatant } from '@/domain/ecosystem'
+import { bracketSize, type BracketCombatant } from '@/domain/ecosystem'
 
-export const BRACKET_SIZE = 16
+export const BRACKET_LEVELS = 4
+export const ENEMY_SLOT_COUNT = bracketSize(BRACKET_LEVELS) - 1
 
 const SETUPS_STORAGE_KEY = 'toornyei:setups'
 
@@ -19,14 +20,18 @@ interface StoredSetup {
   placement?: unknown
 }
 
+function isSlotInBracket(slot: number): boolean {
+  return Number.isSafeInteger(slot) && slot >= 0 && slot < ENEMY_SLOT_COUNT
+}
+
 function createEmptyPlacement(): Placement {
-  return Array.from<string | undefined>({ length: BRACKET_SIZE })
+  return Array.from<string | undefined>({ length: ENEMY_SLOT_COUNT })
 }
 
 function parsePlacement(raw: unknown): Placement | undefined {
-  if (!Array.isArray(raw) || raw.length !== BRACKET_SIZE) return undefined
+  if (!Array.isArray(raw) || raw.length !== ENEMY_SLOT_COUNT) return undefined
   const placement = createEmptyPlacement()
-  for (let slot = 0; slot < BRACKET_SIZE; slot++) {
+  for (let slot = 0; slot < ENEMY_SLOT_COUNT; slot++) {
     const entry: unknown = raw[slot]
     if (entry !== null && typeof entry !== 'string') return undefined
     placement[slot] = typeof entry === 'string' && findEnemyType(entry) ? entry : undefined
@@ -70,17 +75,13 @@ export const useSetupStore = defineStore('setup', () => {
 
   const isComplete = computed(() => placement.value.every((slot) => slot !== undefined))
 
-  function isSlotInBracket(slot: number): boolean {
-    return Number.isInteger(slot) && slot >= 0 && slot < BRACKET_SIZE
-  }
-
-  function placeType(slot: number, typeId: string): boolean {
+  function didPlaceType(slot: number, typeId: string): boolean {
     if (isLocked.value || !isSlotInBracket(slot) || !findEnemyType(typeId)) return false
     placement.value[slot] = typeId
     return true
   }
 
-  function clearSlot(slot: number): boolean {
+  function didClearSlot(slot: number): boolean {
     if (isLocked.value || !isSlotInBracket(slot)) return false
     placement.value[slot] = undefined
     return true
@@ -99,7 +100,7 @@ export const useSetupStore = defineStore('setup', () => {
     return placement.value.map((typeId) => createBracketCombatant(findEnemyType(typeId!)!))
   }
 
-  function saveSetup(name: string): boolean {
+  function didSaveSetup(name: string): boolean {
     const trimmed = name.trim()
     if (trimmed === '') return false
 
@@ -113,7 +114,7 @@ export const useSetupStore = defineStore('setup', () => {
     return true
   }
 
-  function loadSetup(name: string): boolean {
+  function didLoadSetup(name: string): boolean {
     if (isLocked.value) return false
     const setup = savedSetups.value.find((entry) => entry.name === name)
     if (!setup) return false
@@ -126,13 +127,13 @@ export const useSetupStore = defineStore('setup', () => {
     isLocked,
     isComplete,
     savedSetups,
-    placeType,
-    clearSlot,
+    didPlaceType,
+    didClearSlot,
     lockPlacement,
     unlockPlacement,
     buildCombatants,
-    saveSetup,
-    loadSetup,
+    didSaveSetup,
+    didLoadSetup,
   }
 })
 

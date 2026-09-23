@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest'
 import {
   pairUpcomingCombatants,
   createBracket,
+  bracketSize,
   liveMatches,
-  resolveMatch,
+  didResolveMatch,
   roundSurvivors,
   type BracketCombatant,
 } from '../ecosystem'
@@ -23,6 +24,12 @@ function combatants(count: number): BracketCombatant[] {
 }
 
 describe('bracket', () => {
+  describe('bracketSize', () => {
+    it('doubles the participants with every level', () => {
+      expect([1, 2, 3, 4, 5].map((levels) => bracketSize(levels))).toEqual([2, 4, 8, 16, 32])
+    })
+  })
+
   describe('createBracket', () => {
     it('rejects a combatant count that is not a power of two', () => {
       expect(() => createBracket(combatants(3))).toThrow()
@@ -50,33 +57,35 @@ describe('bracket', () => {
     })
 
     it('yields eight first-round matches for a sixteen-slot bracket', () => {
-      expect(liveMatches(createBracket(combatants(16)))).toHaveLength(8)
+      const bracket = createBracket(combatants(16))
+
+      expect(liveMatches(bracket)).toHaveLength(8)
     })
 
     it('makes a later-round match live only once both feeder matches are resolved', () => {
       const bracket = createBracket(combatants(4))
 
-      resolveMatch(bracket, 0, 0, 'champion')
+      didResolveMatch(bracket, 0, 0, 'champion')
       expect(liveMatches(bracket)).toEqual([{ round: 0, index: 1, first: 2, second: 3 }])
 
-      resolveMatch(bracket, 0, 1, 'enemy')
+      didResolveMatch(bracket, 0, 1, 'enemy')
       expect(liveMatches(bracket)).toEqual([{ round: 1, index: 0, first: 0, second: 3 }])
     })
 
     it('is empty once the final is resolved', () => {
       const bracket = createBracket(combatants(2))
 
-      resolveMatch(bracket, 0, 0, 'champion')
+      didResolveMatch(bracket, 0, 0, 'champion')
 
       expect(liveMatches(bracket)).toEqual([])
     })
   })
 
-  describe('resolveMatch', () => {
+  describe('didResolveMatch', () => {
     it('advances the first entrant when the outcome is champion', () => {
       const bracket = createBracket(combatants(4))
 
-      resolveMatch(bracket, 0, 0, 'champion')
+      didResolveMatch(bracket, 0, 0, 'champion')
 
       expect(roundSurvivors(bracket, 1)).toEqual([0])
     })
@@ -84,7 +93,7 @@ describe('bracket', () => {
     it('advances the second entrant when the outcome is enemy', () => {
       const bracket = createBracket(combatants(4))
 
-      resolveMatch(bracket, 0, 0, 'enemy')
+      didResolveMatch(bracket, 0, 0, 'enemy')
 
       expect(roundSurvivors(bracket, 1)).toEqual([1])
     })
@@ -101,7 +110,7 @@ describe('bracket', () => {
       ]
       const bracket = createBracket(slots)
 
-      resolveMatch(bracket, 0, 0, 'champion')
+      didResolveMatch(bracket, 0, 0, 'champion')
 
       expect(slots[0]!.traits).toEqual([
         { stat: 'damage', amount: 5 },
@@ -116,7 +125,7 @@ describe('bracket', () => {
       ]
       const bracket = createBracket(slots)
 
-      resolveMatch(bracket, 0, 0, 'champion')
+      didResolveMatch(bracket, 0, 0, 'champion')
 
       expect(slots[0]!.experienceValue).toBe(22)
       expect(slots[0]!.goldValue).toBe(33)
@@ -129,7 +138,7 @@ describe('bracket', () => {
       ]
       const bracket = createBracket(slots)
 
-      resolveMatch(bracket, 0, 0, 'champion')
+      didResolveMatch(bracket, 0, 0, 'champion')
 
       expect(slots[1]!.traits).toEqual([])
       expect(slots[1]!.experienceValue).toBe(0)
@@ -139,7 +148,7 @@ describe('bracket', () => {
     it('returns true when it resolves a live match', () => {
       const bracket = createBracket(combatants(4))
 
-      expect(resolveMatch(bracket, 0, 0, 'champion')).toBe(true)
+      expect(didResolveMatch(bracket, 0, 0, 'champion')).toBe(true)
     })
 
     it('refuses a match that is already resolved', () => {
@@ -150,9 +159,9 @@ describe('bracket', () => {
         combatant(),
       ]
       const bracket = createBracket(slots)
-      resolveMatch(bracket, 0, 0, 'champion')
+      didResolveMatch(bracket, 0, 0, 'champion')
 
-      expect(resolveMatch(bracket, 0, 0, 'enemy')).toBe(false)
+      expect(didResolveMatch(bracket, 0, 0, 'enemy')).toBe(false)
       expect(roundSurvivors(bracket, 1)).toEqual([0])
       expect(slots[0]!.experienceValue).toBe(22)
     })
@@ -160,14 +169,14 @@ describe('bracket', () => {
     it('refuses a match whose entrants are not both known yet', () => {
       const bracket = createBracket(combatants(4))
 
-      expect(resolveMatch(bracket, 1, 0, 'champion')).toBe(false)
+      expect(didResolveMatch(bracket, 1, 0, 'champion')).toBe(false)
     })
 
     it('refuses a match that does not exist', () => {
       const bracket = createBracket(combatants(4))
 
-      expect(resolveMatch(bracket, 0, 5, 'champion')).toBe(false)
-      expect(resolveMatch(bracket, 9, 0, 'champion')).toBe(false)
+      expect(didResolveMatch(bracket, 0, 5, 'champion')).toBe(false)
+      expect(didResolveMatch(bracket, 9, 0, 'champion')).toBe(false)
     })
   })
 
@@ -175,10 +184,10 @@ describe('bracket', () => {
     it('lists the slots that have reached a round, in bracket order', () => {
       const bracket = createBracket(combatants(4))
 
-      resolveMatch(bracket, 0, 1, 'enemy')
+      didResolveMatch(bracket, 0, 1, 'enemy')
       expect(roundSurvivors(bracket, 1)).toEqual([3])
 
-      resolveMatch(bracket, 0, 0, 'champion')
+      didResolveMatch(bracket, 0, 0, 'champion')
       expect(roundSurvivors(bracket, 1)).toEqual([0, 3])
     })
 
@@ -191,16 +200,18 @@ describe('bracket', () => {
       ]
       const bracket = createBracket(slots)
 
-      resolveMatch(bracket, 0, 0, 'enemy')
-      resolveMatch(bracket, 0, 1, 'enemy')
-      resolveMatch(bracket, 1, 0, 'champion')
+      didResolveMatch(bracket, 0, 0, 'enemy')
+      didResolveMatch(bracket, 0, 1, 'enemy')
+      didResolveMatch(bracket, 1, 0, 'champion')
 
       expect(roundSurvivors(bracket, 2)).toEqual([1])
       expect(slots[1]!.traits).toEqual([{ stat: 'damage', amount: 15 }])
     })
 
     it('is empty for a round that does not exist', () => {
-      expect(roundSurvivors(createBracket(combatants(4)), 7)).toEqual([])
+      const bracket = createBracket(combatants(4))
+
+      expect(roundSurvivors(bracket, 7)).toEqual([])
     })
   })
 })

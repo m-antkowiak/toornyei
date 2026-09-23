@@ -22,6 +22,12 @@ export interface Bracket {
   rounds: Array<Array<number | undefined>>
 }
 
+export const CHAMPION_SLOT = 0
+
+export function bracketSize(levels: number): number {
+  return 2 ** levels
+}
+
 function isPowerOfTwo(count: number): boolean {
   return count >= 2 && (count & (count - 1)) === 0
 }
@@ -63,7 +69,7 @@ export function liveMatches(bracket: Bracket): BracketMatch[] {
   return matches
 }
 
-export function resolveMatch(
+export function didResolveMatch(
   bracket: Bracket,
   round: number,
   index: number,
