@@ -71,7 +71,7 @@ function hardReset() {
             :disabled="progression.experience < progression.championUpgradeCostOf(kind)"
             @click="progression.didPurchaseChampionUpgrade(kind)"
           >
-            Upgrade ({{ progression.championUpgradeCostOf(kind) }} exp)
+            Upgrade ({{ formatNumber(progression.championUpgradeCostOf(kind)) }} exp)
           </button>
         </li>
       </ul>
@@ -135,7 +135,7 @@ function hardReset() {
         </div>
         <div class="stat-row">
           <span>Attack Speed</span>
-          <span class="value">{{ formatNumber(run.championStats.attackSpeed) }}</span>
+          <span class="value">{{ formatNumber(run.championStats.attackSpeed, 2) }}</span>
         </div>
         <div v-if="run.isFighting" class="stat-row">
           <span>Attack</span>
@@ -145,7 +145,7 @@ function hardReset() {
         </div>
         <div v-if="run.champion.traits.length > 0" class="traits">
           <span v-for="trait in run.champion.traits" :key="trait.stat"
-            >{{ trait.stat }} +{{ trait.amount }}</span
+            >{{ trait.stat }} +{{ formatNumber(trait.amount, 2) }}</span
           >
         </div>
       </section>
@@ -170,7 +170,7 @@ function hardReset() {
         </div>
         <div class="stat-row">
           <span>Attack Speed</span>
-          <span class="value">{{ formatNumber(run.currentEnemyStats.attackSpeed) }}</span>
+          <span class="value">{{ formatNumber(run.currentEnemyStats.attackSpeed, 2) }}</span>
         </div>
         <div v-if="run.isFighting" class="stat-row">
           <span>Attack</span>
@@ -180,12 +180,12 @@ function hardReset() {
         </div>
         <div v-if="run.currentEnemy.traits.length > 0" class="traits">
           <span v-for="trait in run.currentEnemy.traits" :key="trait.stat"
-            >{{ trait.stat }} +{{ trait.amount }}</span
+            >{{ trait.stat }} +{{ formatNumber(trait.amount, 2) }}</span
           >
         </div>
         <div class="traits">
-          <span>exp +{{ run.currentEnemyRewards.experience }}</span>
-          <span>gold +{{ run.currentEnemyRewards.gold }}</span>
+          <span>exp +{{ formatNumber(run.currentEnemyRewards.experience) }}</span>
+          <span>gold +{{ formatNumber(run.currentEnemyRewards.gold) }}</span>
         </div>
       </section>
     </aside>

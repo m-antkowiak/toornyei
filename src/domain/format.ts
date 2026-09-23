@@ -14,12 +14,13 @@ function trimNumber(rounded: number, maxDecimals: number): string {
   return rounded.toFixed(maxDecimals).replace(/0+$/, '').replace(/\.$/, '')
 }
 
-export function formatNumber(value: number): string {
+export function formatNumber(value: number, smallDecimals = 1): string {
   const sign = value < 0 ? '-' : ''
   const magnitude = Math.abs(value)
 
   if (magnitude < 1000) {
-    return sign + trimNumber(Math.round(magnitude * 10) / 10, 1)
+    const factor = 10 ** smallDecimals
+    return sign + trimNumber(Math.round(magnitude * factor) / factor, smallDecimals)
   }
 
   const tier = Math.floor(Math.log10(magnitude) / 3)

@@ -37,4 +37,10 @@ describe('format', () => {
       expect(formatNumber(-1500)).toBe('-1.5K')
     })
   })
+
+  it('honours a custom decimal count below one thousand', () => {
+    expect(formatNumber(1.05, 2)).toBe('1.05')
+    expect(formatNumber(1.234, 2)).toBe('1.23')
+    expect(formatNumber(17.490062499, 2)).toBe('17.49')
+  })
 })
