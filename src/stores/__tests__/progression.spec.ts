@@ -176,4 +176,30 @@ describe('progression store', () => {
       expect(store.ladderLevel).toBe(0)
     })
   })
+  describe('hard reset', () => {
+    it('wipes every progression value and the persisted data', () => {
+      const store = useProgressionStore()
+      store.grantGold(50)
+      store.grantExperience(50)
+      store.didPrestige()
+      store.didPurchaseMetaUnlock('placeholder')
+      store.recordEnemyDefeat(0)
+
+      store.hardReset()
+
+      expect(store.gold).toBe(0)
+      expect(store.experience).toBe(0)
+      expect(store.prestigeTokens).toBe(0)
+      expect(store.ladderLevel).toBe(0)
+      expect(store.metaUnlocks).toEqual([{ id: 'placeholder', unlocked: false }])
+      expect(
+        store.enemyProgress.every((enemy) => !enemy.defeated && enemy.upgradeCount === 0),
+      ).toBe(true)
+
+      setActivePinia(createPinia())
+      const reloaded = useProgressionStore()
+      expect(reloaded.prestigeTokens).toBe(0)
+      expect(reloaded.ladderLevel).toBe(0)
+    })
+  })
 })

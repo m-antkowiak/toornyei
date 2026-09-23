@@ -5,6 +5,12 @@ import { formatNumber } from '@/domain/format'
 
 const run = useRunStore()
 const progression = useProgressionStore()
+const isDev = import.meta.env.DEV
+
+function hardReset() {
+  progression.hardReset()
+  window.location.reload()
+}
 </script>
 
 <template>
@@ -62,6 +68,8 @@ const progression = useProgressionStore()
           </button>
         </li>
       </ul>
+
+      <button v-if="isDev" @click="hardReset()">Dev: hard reset everything</button>
 
       <h2>Meta Unlocks</h2>
       <ul class="upgrade-list">

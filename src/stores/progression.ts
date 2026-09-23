@@ -110,6 +110,15 @@ export const useProgressionStore = defineStore('progression', () => {
     return true
   }
 
+  function hardReset() {
+    experience.value = 0
+    gold.value = 0
+    prestigeTokens.value = 0
+    ladderLevel.value = 0
+    metaUnlocks.value = META_UNLOCK_IDS.map((id) => ({ id, unlocked: false }))
+    enemyProgress.value = createEnemyProgress()
+  }
+
   function recordEnemyDefeat(index: number) {
     const enemy = enemyProgress.value[index]
     if (enemy) enemy.defeated = true
@@ -145,6 +154,7 @@ export const useProgressionStore = defineStore('progression', () => {
     grantExperience,
     grantGold,
     didPrestige,
+    hardReset,
     didPurchaseMetaUnlock,
     recordEnemyDefeat,
     upgradeCostOf,
