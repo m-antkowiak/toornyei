@@ -66,7 +66,7 @@ export const useRunStore = defineStore('run', () => {
   const outcome = ref<FightOutcome | undefined>(undefined)
 
   const isRunning = ref(false)
-  let cooldownRemainingMs = 0
+  const cooldownRemainingMs = ref(0)
   let intervalId: ReturnType<typeof setInterval> | undefined
   let lastTickAt = 0
 
@@ -153,7 +153,7 @@ export const useRunStore = defineStore('run', () => {
     if (result === 'enemy') {
       runStatus.value = 'defeated'
       stopEcosystemTicking()
-      cooldownRemainingMs = FIGHT_COOLDOWN_MS
+      cooldownRemainingMs.value = FIGHT_COOLDOWN_MS
       return
     }
 
@@ -164,7 +164,7 @@ export const useRunStore = defineStore('run', () => {
     champion.traits = mergeTraitSets(champion.traits, defeatedEnemy.traits)
     if (rungIndex.value < ladder.value.length - 1) {
       rungIndex.value += 1
-      cooldownRemainingMs = FIGHT_COOLDOWN_MS
+      cooldownRemainingMs.value = FIGHT_COOLDOWN_MS
     } else {
       runStatus.value = 'victorious'
       stopTicking()
@@ -190,10 +190,10 @@ export const useRunStore = defineStore('run', () => {
     const elapsedMs = now - lastTickAt
     lastTickAt = now
 
-    if (cooldownRemainingMs > 0) {
-      cooldownRemainingMs -= elapsedMs
-      if (cooldownRemainingMs <= 0) {
-        cooldownRemainingMs = 0
+    if (cooldownRemainingMs.value > 0) {
+      cooldownRemainingMs.value -= elapsedMs
+      if (cooldownRemainingMs.value <= 0) {
+        cooldownRemainingMs.value = 0
         finishCooldown()
       }
       return
@@ -217,7 +217,7 @@ export const useRunStore = defineStore('run', () => {
 
   function restart() {
     stopTicking()
-    cooldownRemainingMs = 0
+    cooldownRemainingMs.value = 0
     ecosystemFights.clear()
     Object.assign(champion, createChampion())
     ladder.value = createLadder(progression.enemyProgress, progression.ladderLevel)
@@ -250,6 +250,9 @@ export const useRunStore = defineStore('run', () => {
 
   const championHp = computed(() => fight.value?.champion.currentHp ?? championStats.value.hp)
   const enemyHp = computed(() => fight.value?.enemy.currentHp ?? currentEnemyStats.value.hp)
+  const cooldownProgress = computed(() =>
+    cooldownRemainingMs.value > 0 ? 1 - cooldownRemainingMs.value / FIGHT_COOLDOWN_MS : 0,
+  )
   const isFighting = computed(() => fight.value !== undefined && fight.value.outcome === undefined)
 
   function attackProgressOf(getCombatant: () => FightCombatant | undefined) {
@@ -280,6 +283,7 @@ export const useRunStore = defineStore('run', () => {
     enemyHp,
     isFighting,
     isRunning,
+    cooldownProgress,
     championAttackProgress,
     enemyAttackProgress,
     commitToFight,

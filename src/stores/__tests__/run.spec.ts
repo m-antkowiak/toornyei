@@ -496,6 +496,53 @@ describe('run store', () => {
     })
   })
 
+  describe('cooldown progress', () => {
+    it('is zero outside a cooldown', () => {
+      const store = useRunStore()
+      expect(store.cooldownProgress).toBe(0)
+
+      store.champion.baseStats.damage = 1000
+      store.commitToFight()
+      vi.advanceTimersByTime(500)
+
+      expect(store.cooldownProgress).toBe(0)
+    })
+
+    it('fills toward 1 over the cooldown after a win', () => {
+      const store = useRunStore()
+      store.champion.baseStats.damage = 1000
+      store.commitToFight()
+      vi.advanceTimersByTime(1000)
+      expect(store.cooldownProgress).toBeCloseTo(0, 1)
+
+      vi.advanceTimersByTime(500)
+
+      expect(store.cooldownProgress).toBeCloseTo(0.5, 1)
+    })
+
+    it('fills over the cooldown after a loss and empties once the run restarts', () => {
+      const store = useRunStore()
+      loseRun(store)
+
+      vi.advanceTimersByTime(500)
+      expect(store.cooldownProgress).toBeCloseTo(0.5, 1)
+
+      vi.advanceTimersByTime(FIGHT_COOLDOWN_MS)
+      expect(store.cooldownProgress).toBe(0)
+    })
+
+    it('is zero once the next fight starts', () => {
+      const store = useRunStore()
+      store.champion.baseStats.damage = 1000
+      store.champion.baseStats.hp = 1000
+      store.commitToFight()
+      vi.advanceTimersByTime(1000 + FIGHT_COOLDOWN_MS)
+
+      expect(store.isFighting).toBe(true)
+      expect(store.cooldownProgress).toBe(0)
+    })
+  })
+
   describe('restart after defeat', () => {
     it('automatically returns to the start of the ladder with a fresh champion, granting nothing', () => {
       const store = useRunStore()

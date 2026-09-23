@@ -38,6 +38,13 @@ const progression = useProgressionStore()
       <p v-else-if="run.outcome === 'champion'" class="status">Champion wins!</p>
       <p v-else-if="run.outcome === 'enemy'" class="status">Champion loses.</p>
 
+      <div v-if="run.cooldownProgress > 0" class="stat-row cooldown">
+        <span>Cooldown</span>
+        <div class="bar atk">
+          <div class="fill" :style="{ width: run.cooldownProgress * 100 + '%' }" />
+        </div>
+      </div>
+
       <button :disabled="run.isRunning || run.runStatus !== 'active'" @click="run.commitToFight()">
         Commit to Fight
       </button>
@@ -320,6 +327,11 @@ const progression = useProgressionStore()
 
 .bar.atk .fill {
   transition: width 0.1s linear;
+}
+
+.cooldown .fill {
+  background: var(--color-text);
+  opacity: 0.5;
 }
 
 .panel.enemy .fill {
