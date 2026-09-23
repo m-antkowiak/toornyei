@@ -8,60 +8,55 @@ import {
   type FightOutcome,
   type CombatantStats,
 } from '@/domain/fight'
-import { mergeTraitSets, applyTraits, type Trait } from '@/domain/trait'
-import { pairUpcomingCombatants } from '@/domain/ecosystem'
-import { mergeExperience, experienceReward } from '@/domain/experience'
-import { mergeGold, goldReward } from '@/domain/gold'
-import { upgradeStats, upgradeReward } from '@/domain/upgrade'
+import { applyTraits } from '@/domain/trait'
+import {
+  createBracket,
+  liveMatches,
+  didResolveMatch,
+  CHAMPION_SLOT,
+  type Bracket,
+  type BracketCombatant,
+} from '@/domain/ecosystem'
+import { ENEMY_CATALOG } from '@/domain/catalog'
+import { experienceReward } from '@/domain/experience'
+import { goldReward } from '@/domain/gold'
 import { applyChampionUpgrades } from '@/domain/championUpgrade'
 import { ladderLevelStats } from '@/domain/ladderLevel'
-import { LADDER_SEED } from '@/domain/ladder'
-import { useProgressionStore, type EnemyProgress } from '@/stores/progression'
+import { useProgressionStore } from '@/stores/progression'
+import { useSetupStore, BRACKET_LEVELS } from '@/stores/setup'
 
 const TICK_INTERVAL_MS = 20
 const FIGHT_COOLDOWN_MS = 1000
 
 const CHAMPION_BASE_STATS: CombatantStats = { attackSpeed: 1, damage: 20, hp: 200 }
 
-export type RunStatus = 'active' | 'defeated' | 'victorious'
+export type RunStatus = 'setup' | 'active' | 'defeated' | 'victorious'
 
-interface Combatant {
-  baseStats: CombatantStats
-  traits: Trait[]
-  experienceValue: number
-}
-
-interface Enemy extends Combatant {
-  goldValue: number
-}
-
-function createChampion(): Combatant {
-  return reactive({ baseStats: { ...CHAMPION_BASE_STATS }, traits: [], experienceValue: 0 })
-}
-
-function createLadder(enemyProgress: EnemyProgress[], ladderLevel: number): Enemy[] {
-  return LADDER_SEED.map((seed, index) => {
-    const persisted = enemyProgress[index]!
-    return reactive({
-      baseStats: ladderLevelStats(persisted.baseStats, ladderLevel),
-      traits: seed.traits.map((trait) => ({ ...trait })),
-      experienceValue: persisted.experienceValue,
-      goldValue: persisted.goldValue,
-    })
+function createChampion(): BracketCombatant {
+  return reactive({
+    baseStats: { ...CHAMPION_BASE_STATS },
+    traits: [],
+    experienceValue: 0,
+    goldValue: 0,
   })
 }
 
-function combatantStats(combatant: Combatant): CombatantStats {
+function combatantStats(combatant: BracketCombatant): CombatantStats {
   return applyTraits(combatant.baseStats, combatant.traits)
+}
+
+function ecosystemFightKey(round: number, index: number): string {
+  return `${round}:${index}`
 }
 
 export const useRunStore = defineStore('run', () => {
   const progression = useProgressionStore()
+  const setup = useSetupStore()
 
   const champion = createChampion()
-  const ladder = ref(createLadder(progression.enemyProgress, progression.ladderLevel))
-  const rungIndex = ref(0)
-  const runStatus = ref<RunStatus>('active')
+  const bracket = ref<Bracket | undefined>(undefined)
+  const roundIndex = ref(0)
+  const runStatus = ref<RunStatus>('setup')
 
   const fight = ref<FightState | undefined>(undefined)
   const outcome = ref<FightOutcome | undefined>(undefined)
@@ -71,24 +66,51 @@ export const useRunStore = defineStore('run', () => {
   let intervalId: ReturnType<typeof setInterval> | undefined
   let lastTickAt = 0
 
-  const ecosystemFights = new Map<number, FightState>()
+  const ecosystemFights = new Map<string, FightState>()
   let ecosystemIntervalId: ReturnType<typeof setInterval> | undefined
   let lastEcosystemTickAt = 0
 
-  function statsOf(getCombatant: () => Combatant) {
-    return computed(() => combatantStats(getCombatant()))
+  function catalogIndexOfSlot(slot: number): number {
+    return ENEMY_CATALOG.findIndex((type) => type.id === setup.placement[slot - 1])
+  }
+
+  function createEnemies(): BracketCombatant[] | undefined {
+    const built = setup.buildCombatants()
+    if (!built) return undefined
+    return built.map((combatant, index) => {
+      const persisted = progression.enemyProgress[catalogIndexOfSlot(index + 1)]!
+      return reactive({
+        baseStats: ladderLevelStats(persisted.baseStats, progression.ladderLevel),
+        traits: combatant.traits,
+        experienceValue: persisted.experienceValue,
+        goldValue: persisted.goldValue,
+      })
+    })
   }
 
   const championStats = computed(() =>
     applyChampionUpgrades(combatantStats(champion), progression.championUpgrades),
   )
-  const currentEnemy = computed(() => ladder.value[rungIndex.value]!)
-  const currentEnemyStats = statsOf(() => currentEnemy.value)
-  const rewardLevel = computed(() => rungIndex.value + progression.ladderLevel)
-  const currentEnemyRewards = computed(() => ({
-    experience: experienceReward(currentEnemy.value.experienceValue, rewardLevel.value),
-    gold: goldReward(currentEnemy.value.goldValue, rewardLevel.value),
-  }))
+  const championMatch = computed(() =>
+    bracket.value
+      ? liveMatches(bracket.value).find((match) => match.first === CHAMPION_SLOT)
+      : undefined,
+  )
+  const currentEnemy = computed(() =>
+    championMatch.value ? bracket.value!.combatants[championMatch.value.second] : undefined,
+  )
+  const currentEnemyStats = computed(() =>
+    currentEnemy.value ? combatantStats(currentEnemy.value) : undefined,
+  )
+  const rewardLevel = computed(() => roundIndex.value + progression.ladderLevel)
+  const currentEnemyRewards = computed(() =>
+    currentEnemy.value
+      ? {
+          experience: experienceReward(currentEnemy.value.experienceValue, rewardLevel.value),
+          gold: goldReward(currentEnemy.value.goldValue, rewardLevel.value),
+        }
+      : undefined,
+  )
 
   function stopTicking() {
     if (intervalId === undefined) return
@@ -97,38 +119,30 @@ export const useRunStore = defineStore('run', () => {
     isRunning.value = false
   }
 
-  function resolveEcosystemFight(a: number, b: number, result: FightOutcome) {
-    const winnerIndex = result === 'champion' ? a : b
-    const loserIndex = result === 'champion' ? b : a
-    const winner = ladder.value[winnerIndex]!
-    const loser = ladder.value[loserIndex]!
-    winner.traits = mergeTraitSets(winner.traits, loser.traits)
-    loser.traits = []
-    winner.experienceValue = mergeExperience(winner.experienceValue, loser.experienceValue)
-    loser.experienceValue = 0
-    winner.goldValue = mergeGold(winner.goldValue, loser.goldValue)
-    loser.goldValue = 0
-  }
-
   function tickEcosystem(elapsedMs: number) {
-    const pairs = pairUpcomingCombatants(ladder.value.length, rungIndex.value)
-    const activeFirstIndices = new Set(pairs.map(([a]) => a))
+    if (!bracket.value) return
+    const matches = liveMatches(bracket.value).filter((match) => match.first !== CHAMPION_SLOT)
+    const liveKeys = new Set(matches.map((match) => ecosystemFightKey(match.round, match.index)))
 
-    for (const first of ecosystemFights.keys()) {
-      if (!activeFirstIndices.has(first)) ecosystemFights.delete(first)
+    for (const key of ecosystemFights.keys()) {
+      if (!liveKeys.has(key)) ecosystemFights.delete(key)
     }
 
-    for (const [a, b] of pairs) {
-      let fight = ecosystemFights.get(a)
-      if (!fight) {
-        fight = createFight(combatantStats(ladder.value[a]!), combatantStats(ladder.value[b]!))
-        ecosystemFights.set(a, fight)
+    for (const match of matches) {
+      const key = ecosystemFightKey(match.round, match.index)
+      let duel = ecosystemFights.get(key)
+      if (!duel) {
+        duel = createFight(
+          combatantStats(bracket.value.combatants[match.first]!),
+          combatantStats(bracket.value.combatants[match.second]!),
+        )
+        ecosystemFights.set(key, duel)
       }
 
-      advanceFight(fight, elapsedMs)
-      if (fight.outcome !== undefined) {
-        resolveEcosystemFight(a, b, fight.outcome)
-        ecosystemFights.delete(a)
+      advanceFight(duel, elapsedMs)
+      if (duel.outcome !== undefined) {
+        didResolveMatch(bracket.value, match.round, match.index, duel.outcome)
+        ecosystemFights.delete(key)
       }
     }
   }
@@ -150,42 +164,40 @@ export const useRunStore = defineStore('run', () => {
     }, TICK_INTERVAL_MS)
   }
 
+  function endRun(status: 'defeated' | 'victorious') {
+    runStatus.value = status
+    stopTicking()
+    stopEcosystemTicking()
+  }
+
   function resolveFightOutcome(result: FightOutcome) {
     outcome.value = result
 
     if (result === 'enemy') {
-      runStatus.value = 'defeated'
-      stopEcosystemTicking()
-      cooldownRemainingMs.value = FIGHT_COOLDOWN_MS
+      endRun('defeated')
       return
     }
 
-    const defeatedEnemy = currentEnemy.value
-    progression.recordEnemyDefeat(rungIndex.value)
+    const match = championMatch.value!
+    const defeatedEnemy = bracket.value!.combatants[match.second]!
+    progression.recordEnemyDefeat(catalogIndexOfSlot(match.second))
     progression.grantExperience(experienceReward(defeatedEnemy.experienceValue, rewardLevel.value))
     progression.grantGold(goldReward(defeatedEnemy.goldValue, rewardLevel.value))
-    champion.traits = mergeTraitSets(champion.traits, defeatedEnemy.traits)
-    if (rungIndex.value < ladder.value.length - 1) {
-      rungIndex.value += 1
+    didResolveMatch(bracket.value!, match.round, match.index, 'champion')
+
+    if (roundIndex.value < BRACKET_LEVELS - 1) {
+      roundIndex.value += 1
       cooldownRemainingMs.value = FIGHT_COOLDOWN_MS
     } else {
-      runStatus.value = 'victorious'
-      stopTicking()
-      stopEcosystemTicking()
+      endRun('victorious')
     }
   }
 
-  function beginFight() {
+  function didBeginFight(): boolean {
+    if (!currentEnemyStats.value) return false
     outcome.value = undefined
     fight.value = createFight(championStats.value, currentEnemyStats.value)
-  }
-
-  function finishCooldown() {
-    if (runStatus.value === 'defeated') {
-      restart()
-      return
-    }
-    beginFight()
+    return true
   }
 
   function tick() {
@@ -197,44 +209,83 @@ export const useRunStore = defineStore('run', () => {
       cooldownRemainingMs.value -= elapsedMs
       if (cooldownRemainingMs.value <= 0) {
         cooldownRemainingMs.value = 0
-        finishCooldown()
+        fight.value = undefined
+        didBeginFight()
       }
       return
     }
 
-    if (!fight.value) return
+    if (!fight.value) {
+      didBeginFight()
+      return
+    }
     advanceFight(fight.value, elapsedMs)
     if (fight.value.outcome !== undefined) {
       resolveFightOutcome(fight.value.outcome)
     }
   }
 
-  function commitToFight() {
-    if (runStatus.value !== 'active' || isRunning.value) return
-    beginFight()
-    lastTickAt = Date.now()
+  function didBeginRun(): boolean {
+    const enemies = createEnemies()
+    if (!enemies) return false
+
     stopTicking()
+    stopEcosystemTicking()
+    ecosystemFights.clear()
+    bracket.value = createBracket([champion, ...enemies])
+    roundIndex.value = 0
+    cooldownRemainingMs.value = 0
+    fight.value = undefined
+    outcome.value = undefined
+    setup.lockPlacement()
+    runStatus.value = 'active'
+
+    didBeginFight()
+    lastTickAt = Date.now()
     isRunning.value = true
     intervalId = setInterval(tick, TICK_INTERVAL_MS)
+    startEcosystemTicking()
+    return true
+  }
+
+  function resetToSetup() {
+    stopTicking()
+    stopEcosystemTicking()
+    ecosystemFights.clear()
+    Object.assign(champion, createChampion())
+    bracket.value = undefined
+    roundIndex.value = 0
+    cooldownRemainingMs.value = 0
+    fight.value = undefined
+    outcome.value = undefined
+    setup.unlockPlacement()
+    runStatus.value = 'setup'
+  }
+
+  function isRunOver(): boolean {
+    return runStatus.value === 'defeated' || runStatus.value === 'victorious'
+  }
+
+  function commitToFight() {
+    if (runStatus.value !== 'setup' || isRunning.value) return
+    didBeginRun()
   }
 
   function restart() {
-    stopTicking()
-    cooldownRemainingMs.value = 0
-    ecosystemFights.clear()
+    if (!isRunOver()) return
     Object.assign(champion, createChampion())
-    ladder.value = createLadder(progression.enemyProgress, progression.ladderLevel)
-    rungIndex.value = 0
-    runStatus.value = 'active'
-    fight.value = undefined
-    outcome.value = undefined
-    startEcosystemTicking()
+    didBeginRun()
+  }
+
+  function edit() {
+    if (!isRunOver()) return
+    resetToSetup()
   }
 
   function prestige() {
     if (runStatus.value !== 'victorious') return
     progression.didPrestige()
-    restart()
+    resetToSetup()
   }
 
   function upgradeCostOf(index: number): number {
@@ -242,21 +293,22 @@ export const useRunStore = defineStore('run', () => {
   }
 
   function didPurchaseEnemyUpgrade(index: number): boolean {
-    if (!progression.didPurchaseEnemyUpgrade(index)) return false
-
-    const enemy = ladder.value[index]!
-    enemy.baseStats = upgradeStats(enemy.baseStats)
-    enemy.goldValue = upgradeReward(enemy.goldValue)
-    enemy.experienceValue = upgradeReward(enemy.experienceValue)
-    return true
+    return progression.didPurchaseEnemyUpgrade(index)
   }
 
   const championHp = computed(() => fight.value?.champion.currentHp ?? championStats.value.hp)
-  const enemyHp = computed(() => fight.value?.enemy.currentHp ?? currentEnemyStats.value.hp)
+  const enemyHp = computed(() => fight.value?.enemy.currentHp ?? currentEnemyStats.value?.hp ?? 0)
   const cooldownProgress = computed(() =>
     cooldownRemainingMs.value > 0 ? 1 - cooldownRemainingMs.value / FIGHT_COOLDOWN_MS : 0,
   )
   const isFighting = computed(() => fight.value !== undefined && fight.value.outcome === undefined)
+  const isAwaitingOpponent = computed(
+    () =>
+      runStatus.value === 'active' &&
+      fight.value === undefined &&
+      cooldownRemainingMs.value === 0 &&
+      currentEnemy.value === undefined,
+  )
 
   function attackProgressOf(getCombatant: () => FightCombatant | undefined) {
     return computed(() => {
@@ -270,13 +322,11 @@ export const useRunStore = defineStore('run', () => {
   const championAttackProgress = attackProgressOf(() => fight.value?.champion)
   const enemyAttackProgress = attackProgressOf(() => fight.value?.enemy)
 
-  startEcosystemTicking()
-
   return {
     champion,
     championStats,
-    ladder,
-    rungIndex,
+    bracket,
+    roundIndex,
     runStatus,
     currentEnemy,
     currentEnemyStats,
@@ -286,10 +336,13 @@ export const useRunStore = defineStore('run', () => {
     enemyHp,
     isFighting,
     isRunning,
+    isAwaitingOpponent,
     cooldownProgress,
     championAttackProgress,
     enemyAttackProgress,
     commitToFight,
+    restart,
+    edit,
     prestige,
     upgradeCostOf,
     didPurchaseEnemyUpgrade,

@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { useRunStore } from '@/stores/run'
 import { useProgressionStore } from '@/stores/progression'
+import { useSetupStore, BRACKET_LEVELS } from '@/stores/setup'
+import { ENEMY_CATALOG } from '@/domain/catalog'
 import { formatNumber } from '@/domain/format'
 import { CHAMPION_UPGRADE_KINDS, type ChampionUpgradeKind } from '@/domain/championUpgrade'
 
 const run = useRunStore()
 const progression = useProgressionStore()
+const setup = useSetupStore()
 const isDev = import.meta.env.DEV
 
 const championUpgradeLabels: Record<ChampionUpgradeKind, string> = {
@@ -26,30 +29,30 @@ function hardReset() {
       <h2>Ladder</h2>
       <ol class="stepper">
         <li
-          v-for="(rung, index) in run.ladder"
+          v-for="index in BRACKET_LEVELS"
           :key="index"
           class="step"
           :class="{
-            cleared: index < run.rungIndex,
-            current: index === run.rungIndex,
-            locked: index > run.rungIndex,
+            cleared: index - 1 < run.roundIndex,
+            current: index - 1 === run.roundIndex,
+            locked: index - 1 > run.roundIndex,
           }"
-          :aria-current="index === run.rungIndex ? 'step' : undefined"
+          :aria-current="index - 1 === run.roundIndex ? 'step' : undefined"
         >
-          <div class="dot">{{ index + 1 }}</div>
-          <div v-if="index < run.ladder.length - 1" class="connector" />
+          <div class="dot">{{ index }}</div>
+          <div v-if="index < BRACKET_LEVELS" class="connector" />
         </li>
       </ol>
 
       <p v-if="run.isFighting" class="status">Fighting...</p>
       <p v-else-if="run.runStatus === 'victorious'" class="status">
-        You cleared the Ladder! Prestige to climb again.
+        You cleared the Bracket! Restart, Edit your setup, or Prestige.
       </p>
       <p v-else-if="run.runStatus === 'defeated'" class="status">
-        Your Champion has fallen. Restarting...
+        Your Champion has fallen. Restart or Edit your setup.
       </p>
+      <p v-else-if="run.isAwaitingOpponent" class="status">Awaiting the next opponent...</p>
       <p v-else-if="run.outcome === 'champion'" class="status">Champion wins!</p>
-      <p v-else-if="run.outcome === 'enemy'" class="status">Champion loses.</p>
 
       <div v-if="run.cooldownProgress > 0" class="stat-row cooldown">
         <span>Cooldown</span>
@@ -58,15 +61,36 @@ function hardReset() {
         </div>
       </div>
 
-      <button :disabled="run.isRunning || run.runStatus !== 'active'" @click="run.commitToFight()">
-        Commit to Fight
-      </button>
-      <button v-if="run.runStatus === 'victorious'" @click="run.prestige()">Prestige</button>
+      <template v-if="run.runStatus === 'setup'">
+        <h2>Setup</h2>
+        <ul class="upgrade-list">
+          <li v-for="(typeId, slot) in setup.placement" :key="slot" class="upgrade-row">
+            <span>Slot {{ slot + 2 }}</span>
+            <select
+              :value="typeId ?? ''"
+              @change="setup.didPlaceType(slot, ($event.target as HTMLSelectElement).value)"
+            >
+              <option value="" disabled>Choose an Enemy</option>
+              <option v-for="type in ENEMY_CATALOG" :key="type.id" :value="type.id">
+                {{ type.name }}
+              </option>
+            </select>
+          </li>
+        </ul>
+        <button :disabled="!setup.isComplete" @click="run.commitToFight()">Commit to Fight</button>
+      </template>
+      <template v-else-if="run.runStatus !== 'active'">
+        <button @click="run.restart()">Restart</button>
+        <button @click="run.edit()">Edit</button>
+        <button v-if="run.runStatus === 'victorious'" @click="run.prestige()">Prestige</button>
+      </template>
 
       <h2>Champion Upgrades</h2>
       <ul class="upgrade-list">
         <li v-for="kind in CHAMPION_UPGRADE_KINDS" :key="kind" class="upgrade-row">
-          <span>{{ championUpgradeLabels[kind] }} (Lv {{ progression.championUpgrades[kind] }})</span>
+          <span
+            >{{ championUpgradeLabels[kind] }} (Lv {{ progression.championUpgrades[kind] }})</span
+          >
           <button
             :disabled="progression.experience < progression.championUpgradeCostOf(kind)"
             @click="progression.didPurchaseChampionUpgrade(kind)"
@@ -150,8 +174,11 @@ function hardReset() {
         </div>
       </section>
 
-      <section class="panel enemy">
-        <h2>Enemy · Rung {{ run.rungIndex + 1 }}</h2>
+      <section
+        v-if="run.currentEnemy && run.currentEnemyStats && run.currentEnemyRewards"
+        class="panel enemy"
+      >
+        <h2>Enemy · Round {{ run.roundIndex + 1 }}</h2>
         <div class="stat-row">
           <span>HP</span>
           <div class="bar">

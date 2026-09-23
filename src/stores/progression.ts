@@ -1,7 +1,7 @@
 import { ref, reactive, watch } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import type { CombatantStats } from '@/domain/fight'
-import { LADDER_SEED } from '@/domain/ladder'
+import { ENEMY_CATALOG } from '@/domain/catalog'
 import { upgradeCost, upgradeStats, upgradeReward } from '@/domain/upgrade'
 import {
   championUpgradeCost,
@@ -56,11 +56,11 @@ export interface EnemyProgress {
 }
 
 function createEnemyProgress(): EnemyProgress[] {
-  return LADDER_SEED.map((seed) =>
+  return ENEMY_CATALOG.map((type) =>
     reactive({
-      baseStats: { ...seed.baseStats },
-      goldValue: seed.goldValue,
-      experienceValue: seed.experienceValue,
+      baseStats: { ...type.baseStats },
+      goldValue: type.goldValue,
+      experienceValue: type.experienceValue,
       defeated: false,
       upgradeCount: 0,
     }),

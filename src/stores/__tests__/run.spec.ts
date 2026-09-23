@@ -2,26 +2,53 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useRunStore } from '../run'
 import { useProgressionStore } from '../progression'
-import { applyTraits } from '@/domain/trait'
+import { useSetupStore, ENEMY_SLOT_COUNT } from '../setup'
+import { ENEMY_CATALOG, findEnemyType } from '@/domain/catalog'
 import { experienceReward } from '@/domain/experience'
 import { goldReward } from '@/domain/gold'
-import { createFight, advanceFight } from '@/domain/fight'
 
 const FIGHT_COOLDOWN_MS = 1000
+const WHOLE_BRACKET_MS = 60_000
 
-function loseRun(store: ReturnType<typeof useRunStore>) {
-  store.champion.baseStats.damage = 5
-  store.champion.baseStats.hp = 10
-  store.currentEnemy.baseStats.damage = 1000
-  store.commitToFight()
+function setupRun(typeId = 'grunt') {
+  const run = useRunStore()
+  const setup = useSetupStore()
+  const progression = useProgressionStore()
+  for (let slot = 0; slot < ENEMY_SLOT_COUNT; slot++) {
+    setup.didPlaceType(slot, typeId)
+  }
+  return { run, setup, progression }
+}
+
+function progressOf(progression: ReturnType<typeof useProgressionStore>, typeId: string) {
+  return progression.enemyProgress[ENEMY_CATALOG.findIndex((type) => type.id === typeId)]!
+}
+
+function makeChampionUnkillable(run: ReturnType<typeof useRunStore>) {
+  run.champion.baseStats.damage = 1000
+  run.champion.baseStats.hp = 100_000
+}
+
+function setupFastSecondRound() {
+  const stores = setupRun()
+  stores.setup.didPlaceType(1, 'raider')
+  progressOf(stores.progression, 'raider').baseStats.damage = 1000
+  makeChampionUnkillable(stores.run)
+  return stores
+}
+
+function loseFirstFight(stores: ReturnType<typeof setupRun>) {
+  stores.run.champion.baseStats.damage = 5
+  stores.run.champion.baseStats.hp = 10
+  progressOf(stores.progression, 'grunt').baseStats.damage = 1000
+  stores.run.commitToFight()
   vi.advanceTimersByTime(1000)
 }
 
-function winWholeLadder(store: ReturnType<typeof useRunStore>) {
-  store.champion.baseStats.damage = 1000
-  store.champion.baseStats.hp = 1000
-  store.commitToFight()
-  vi.advanceTimersByTime(store.ladder.length * (1000 + FIGHT_COOLDOWN_MS))
+function winWholeBracket(stores: ReturnType<typeof setupRun>) {
+  makeChampionUnkillable(stores.run)
+  stores.run.commitToFight()
+  vi.advanceTimersByTime(WHOLE_BRACKET_MS)
 }
 
 describe('run store', () => {
@@ -34,637 +61,746 @@ describe('run store', () => {
     vi.useRealTimers()
   })
 
-  it('resolves a champion win when the champion out-damages the enemy', () => {
-    const store = useRunStore()
-    store.champion.baseStats.damage = 20
-    store.currentEnemy.baseStats.damage = 5
-    store.currentEnemy.baseStats.hp = 40
+  describe('committing to a run', () => {
+    it('starts in setup with no bracket', () => {
+      const run = useRunStore()
 
-    store.commitToFight()
-    vi.advanceTimersByTime(2500)
+      expect(run.runStatus).toBe('setup')
+      expect(run.bracket).toBeUndefined()
+      expect(run.currentEnemy).toBeUndefined()
+      expect(run.isFighting).toBe(false)
+    })
 
-    expect(store.outcome).toBe('champion')
-    expect(store.isFighting).toBe(false)
+    it('refuses to commit while the placement is incomplete', () => {
+      const run = useRunStore()
+      const setup = useSetupStore()
+      setup.didPlaceType(0, 'grunt')
+
+      run.commitToFight()
+
+      expect(run.runStatus).toBe('setup')
+      expect(run.bracket).toBeUndefined()
+      expect(run.isRunning).toBe(false)
+      expect(setup.isLocked).toBe(false)
+    })
+
+    it('builds a sixteen-slot bracket with the Champion in the first slot, and locks the placement', () => {
+      const { run, setup } = setupRun()
+
+      run.commitToFight()
+
+      expect(run.runStatus).toBe('active')
+      expect(run.bracket!.combatants).toHaveLength(16)
+      expect(run.bracket!.combatants[0]).toBe(run.champion)
+      expect(setup.isLocked).toBe(true)
+      expect(setup.didPlaceType(0, 'brute')).toBe(false)
+    })
+
+    it('puts the placed Enemy types into the slots after the Champion, in order', () => {
+      const { run, setup } = setupRun()
+      setup.didPlaceType(0, 'scout')
+      setup.didPlaceType(14, 'raider')
+
+      run.commitToFight()
+
+      expect(run.bracket!.combatants[1]!.baseStats).toEqual(findEnemyType('scout')!.baseStats)
+      expect(run.bracket!.combatants[15]!.baseStats).toEqual(findEnemyType('raider')!.baseStats)
+    })
+
+    it('starts the first fight against the Enemy next to the Champion', () => {
+      const { run } = setupRun()
+
+      run.commitToFight()
+
+      expect(run.isFighting).toBe(true)
+      expect(run.currentEnemy).toBe(run.bracket!.combatants[1])
+      expect(run.roundIndex).toBe(0)
+    })
+
+    it('ignores committing again while a run is in progress', () => {
+      const { run } = setupRun()
+      makeChampionUnkillable(run)
+      run.commitToFight()
+      vi.advanceTimersByTime(1000)
+      const bracket = run.bracket
+
+      run.commitToFight()
+
+      expect(run.bracket).toBe(bracket)
+      expect(run.roundIndex).toBe(1)
+    })
   })
 
-  it('resolves a champion loss when the enemy out-damages the champion', () => {
-    const store = useRunStore()
-    store.champion.baseStats.damage = 5
-    store.champion.baseStats.hp = 40
-    store.currentEnemy.baseStats.damage = 20
+  describe('fights', () => {
+    it('resolves a champion win when the champion out-damages the enemy', () => {
+      const { run } = setupRun()
+      run.champion.baseStats.damage = 20
 
-    store.commitToFight()
-    vi.advanceTimersByTime(2500)
+      run.commitToFight()
+      vi.advanceTimersByTime(6000)
 
-    expect(store.outcome).toBe('enemy')
-    expect(store.isFighting).toBe(false)
-  })
+      expect(run.outcome).toBe('champion')
+      expect(run.isFighting).toBe(false)
+    })
 
-  it('depletes HP per tick at the combatants attack cadence', () => {
-    const store = useRunStore()
-    store.champion.baseStats.attackSpeed = 1
-    store.champion.baseStats.damage = 10
-    store.currentEnemy.baseStats.hp = 100
-    store.currentEnemy.baseStats.damage = 0
+    it('resolves a champion loss when the enemy out-damages the champion', () => {
+      const stores = setupRun()
+      stores.run.champion.baseStats.damage = 5
+      stores.run.champion.baseStats.hp = 40
+      progressOf(stores.progression, 'grunt').baseStats.damage = 20
 
-    store.commitToFight()
-    expect(store.enemyHp).toBe(100)
+      stores.run.commitToFight()
+      vi.advanceTimersByTime(2500)
 
-    vi.advanceTimersByTime(1000)
-    expect(store.enemyHp).toBe(90)
+      expect(stores.run.outcome).toBe('enemy')
+      expect(stores.run.isFighting).toBe(false)
+    })
 
-    vi.advanceTimersByTime(1000)
-    expect(store.enemyHp).toBe(80)
-  })
+    it('depletes HP per tick at the combatants attack cadence', () => {
+      const { run } = setupRun()
+      run.champion.baseStats.attackSpeed = 1
+      run.champion.baseStats.damage = 10
+      run.champion.baseStats.hp = 100_000
 
-  it('stops ticking once the fight resolves', () => {
-    const store = useRunStore()
-    store.champion.baseStats.damage = 1000
+      run.commitToFight()
+      expect(run.enemyHp).toBe(100)
 
-    store.commitToFight()
-    vi.advanceTimersByTime(1000)
-    expect(store.outcome).toBe('champion')
-    const enemyHpAfterWin = store.enemyHp
+      vi.advanceTimersByTime(1000)
+      expect(run.enemyHp).toBe(90)
 
-    vi.advanceTimersByTime(500)
-    expect(store.enemyHp).toBe(enemyHpAfterWin)
+      vi.advanceTimersByTime(1000)
+      expect(run.enemyHp).toBe(80)
+    })
+
+    it('stops advancing the fight once it resolves', () => {
+      const { run } = setupRun()
+      makeChampionUnkillable(run)
+
+      run.commitToFight()
+      vi.advanceTimersByTime(1000)
+      expect(run.outcome).toBe('champion')
+      const enemyHpAfterWin = run.enemyHp
+
+      vi.advanceTimersByTime(500)
+      expect(run.enemyHp).toBe(enemyHpAfterWin)
+    })
   })
 
   describe('attack progress', () => {
     it('is zero for both combatants right after committing to a fight', () => {
-      const store = useRunStore()
-      store.champion.baseStats.attackSpeed = 1
-      store.currentEnemy.baseStats.attackSpeed = 1
+      const { run } = setupRun()
 
-      store.commitToFight()
+      run.commitToFight()
 
-      expect(store.championAttackProgress).toBe(0)
-      expect(store.enemyAttackProgress).toBe(0)
+      expect(run.championAttackProgress).toBe(0)
+      expect(run.enemyAttackProgress).toBe(0)
     })
 
     it('fills toward 1 over the attack interval and resets after an attack lands', () => {
-      const store = useRunStore()
-      store.champion.baseStats.attackSpeed = 1
-      store.champion.baseStats.hp = 1000
-      store.currentEnemy.baseStats.attackSpeed = 1
-      store.currentEnemy.baseStats.hp = 1000
-      store.currentEnemy.baseStats.damage = 0
+      const { run } = setupRun()
+      run.champion.baseStats.attackSpeed = 1
+      run.champion.baseStats.hp = 100_000
+      run.champion.baseStats.damage = 1
 
-      store.commitToFight()
+      run.commitToFight()
       vi.advanceTimersByTime(500)
 
-      expect(store.championAttackProgress).toBeCloseTo(0.5, 1)
+      expect(run.championAttackProgress).toBeCloseTo(0.5, 1)
 
       vi.advanceTimersByTime(500)
 
-      expect(store.championAttackProgress).toBeCloseTo(0, 1)
+      expect(run.championAttackProgress).toBeCloseTo(0, 1)
     })
 
     it('is zero when no fight is in progress', () => {
-      const store = useRunStore()
+      const run = useRunStore()
 
-      expect(store.championAttackProgress).toBe(0)
-      expect(store.enemyAttackProgress).toBe(0)
+      expect(run.championAttackProgress).toBe(0)
+      expect(run.enemyAttackProgress).toBe(0)
     })
   })
 
-  describe('ladder progression', () => {
-    it('advances to the next rung and its enemy on a champion win', () => {
-      const store = useRunStore()
-      store.champion.baseStats.damage = 1000
-      const firstEnemy = store.currentEnemy
+  describe('bracket progression', () => {
+    it('advances to the next round on a champion win', () => {
+      const { run } = setupRun()
+      makeChampionUnkillable(run)
 
-      expect(store.rungIndex).toBe(0)
-
-      store.commitToFight()
+      run.commitToFight()
       vi.advanceTimersByTime(1000)
 
-      expect(store.outcome).toBe('champion')
-      expect(store.rungIndex).toBe(1)
-      expect(store.currentEnemy).not.toBe(firstEnemy)
+      expect(run.outcome).toBe('champion')
+      expect(run.roundIndex).toBe(1)
+      expect(run.bracket!.rounds[1]![0]).toBe(0)
     })
 
-    it('does not advance the rung on a champion loss', () => {
-      const store = useRunStore()
-      store.champion.baseStats.damage = 5
-      store.champion.baseStats.hp = 10
-      store.currentEnemy.baseStats.damage = 1000
+    it('does not advance the round on a champion loss', () => {
+      const stores = setupRun()
 
-      store.commitToFight()
-      vi.advanceTimersByTime(1000)
+      loseFirstFight(stores)
 
-      expect(store.outcome).toBe('enemy')
-      expect(store.rungIndex).toBe(0)
+      expect(stores.run.outcome).toBe('enemy')
+      expect(stores.run.roundIndex).toBe(0)
+    })
+
+    it('faces the winner of the neighbouring pair in the second round', () => {
+      const { run } = setupFastSecondRound()
+
+      run.commitToFight()
+      vi.advanceTimersByTime(1000 + FIGHT_COOLDOWN_MS)
+
+      expect(run.roundIndex).toBe(1)
+      expect(run.currentEnemy).toBe(run.bracket!.combatants[2])
+    })
+  })
+
+  describe('waiting for an opponent', () => {
+    it('waits when the Champion is ready before the next opponent has won its own match', () => {
+      const { run } = setupRun()
+      makeChampionUnkillable(run)
+
+      run.commitToFight()
+      vi.advanceTimersByTime(1000 + FIGHT_COOLDOWN_MS + 500)
+
+      expect(run.roundIndex).toBe(1)
+      expect(run.currentEnemy).toBeUndefined()
+      expect(run.isAwaitingOpponent).toBe(true)
+      expect(run.isFighting).toBe(false)
+    })
+
+    it('starts the fight as soon as the opponent has won its match', () => {
+      const { run } = setupRun()
+      makeChampionUnkillable(run)
+      run.commitToFight()
+      vi.advanceTimersByTime(1000 + FIGHT_COOLDOWN_MS + 500)
+      expect(run.isAwaitingOpponent).toBe(true)
+
+      vi.advanceTimersByTime(8000)
+
+      expect(run.isAwaitingOpponent).toBe(false)
+      expect(run.currentEnemy).toBeDefined()
+      expect(run.roundIndex).toBe(1)
+      expect(run.isFighting).toBe(true)
+    })
+
+    it('is not waiting while fighting or before a run starts', () => {
+      const { run } = setupRun()
+      expect(run.isAwaitingOpponent).toBe(false)
+
+      run.commitToFight()
+
+      expect(run.isAwaitingOpponent).toBe(false)
     })
   })
 
   describe('traits', () => {
     it('grants the champion the defeated enemys traits, boosting the next fight', () => {
-      const store = useRunStore()
-      store.champion.baseStats.damage = 1000
-      store.champion.baseStats.hp = 1000
+      const { run } = setupRun()
+      makeChampionUnkillable(run)
 
-      store.commitToFight()
+      run.commitToFight()
       vi.advanceTimersByTime(1000)
-      expect(store.outcome).toBe('champion')
+      expect(run.outcome).toBe('champion')
 
-      expect(store.champion.traits).toEqual(expect.arrayContaining([{ stat: 'damage', amount: 2 }]))
-      expect(store.championStats.damage).toBe(1002)
+      expect(run.champion.traits).toEqual([{ stat: 'damage', amount: 2 }])
+      expect(run.championStats.damage).toBe(1002)
     })
 
     it('combines same-stat-type traits from consecutive wins by simple addition', () => {
-      const store = useRunStore()
-      store.champion.baseStats.damage = 1000
-      store.champion.baseStats.hp = 1000
-      store.ladder[1]!.baseStats.hp = 900
-      store.ladder[1]!.traits = [{ stat: 'damage', amount: 4 }]
+      const { run } = setupFastSecondRound()
 
-      store.commitToFight()
+      run.commitToFight()
       vi.advanceTimersByTime(1000 + FIGHT_COOLDOWN_MS + 1000)
 
-      expect(store.champion.traits).toEqual([{ stat: 'damage', amount: 6 }])
+      expect(run.roundIndex).toBe(2)
+      expect(run.champion.traits).toEqual(
+        expect.arrayContaining([
+          { stat: 'damage', amount: 4 },
+          { stat: 'attackSpeed', amount: 0.2 },
+        ]),
+      )
     })
   })
 
   describe('run status', () => {
-    it('shows the run as defeated on a champion loss and refuses a new fight during the cooldown', () => {
-      const store = useRunStore()
+    it('ends the run as defeated on a champion loss and refuses a new fight', () => {
+      const stores = setupRun()
 
-      loseRun(store)
+      loseFirstFight(stores)
 
-      expect(store.outcome).toBe('enemy')
-      expect(store.runStatus).toBe('defeated')
+      expect(stores.run.outcome).toBe('enemy')
+      expect(stores.run.runStatus).toBe('defeated')
+      expect(stores.run.isRunning).toBe(false)
 
-      store.commitToFight()
-      expect(store.isFighting).toBe(false)
+      stores.run.commitToFight()
+      expect(stores.run.isFighting).toBe(false)
     })
 
-    it('ends the run in victory on clearing the final rung', () => {
-      const store = useRunStore()
-      store.champion.baseStats.damage = 1000
-      store.champion.baseStats.hp = 1000
+    it('stays defeated instead of restarting on its own', () => {
+      const stores = setupRun()
 
-      store.commitToFight()
-      vi.advanceTimersByTime(store.ladder.length * (1000 + FIGHT_COOLDOWN_MS))
+      loseFirstFight(stores)
+      vi.advanceTimersByTime(60_000)
 
-      expect(store.outcome).toBe('champion')
-      expect(store.runStatus).toBe('victorious')
+      expect(stores.run.runStatus).toBe('defeated')
+      expect(stores.run.isFighting).toBe(false)
+      expect(stores.run.bracket).toBeDefined()
+    })
+
+    it('ends the run in victory on winning the final round', () => {
+      const stores = setupRun()
+
+      winWholeBracket(stores)
+
+      expect(stores.run.outcome).toBe('champion')
+      expect(stores.run.runStatus).toBe('victorious')
+      expect(stores.run.roundIndex).toBe(3)
+      expect(stores.run.isRunning).toBe(false)
     })
   })
 
   describe('ecosystem', () => {
-    it("ticks enemies not engaged by the champion against each other, transferring the loser's traits to the winner", () => {
-      const store = useRunStore()
-      store.ladder[1]!.baseStats.damage = 1000
+    it("duels enemies not engaged by the champion, transferring the loser's traits to the winner", () => {
+      const { run, setup, progression } = setupRun()
+      setup.didPlaceType(1, 'raider')
+      setup.didPlaceType(2, 'grunt')
+      progressOf(progression, 'raider').baseStats.damage = 1000
+      const winnerXpBefore = progressOf(progression, 'raider').experienceValue
+      const loserXp = progressOf(progression, 'grunt').experienceValue
+      run.champion.baseStats.damage = 0
+      run.champion.baseStats.hp = 100_000
 
+      run.commitToFight()
       vi.advanceTimersByTime(1000)
 
-      expect(store.ladder[1]!.traits).toEqual(
+      const winner = run.bracket!.combatants[2]
+      const loser = run.bracket!.combatants[3]
+      expect(winner!.traits).toEqual(
         expect.arrayContaining([
-          { stat: 'attackSpeed', amount: 0.1 },
-          { stat: 'hp', amount: 20 },
+          { stat: 'attackSpeed', amount: 0.2 },
+          { stat: 'damage', amount: 2 },
         ]),
       )
-      expect(store.ladder[2]!.traits).toEqual([])
-
-      const winnerStats = applyTraits(store.ladder[1]!.baseStats, store.ladder[1]!.traits)
-      expect(winnerStats.hp).toBe(store.ladder[1]!.baseStats.hp + 20)
+      expect(loser!.traits).toEqual([])
+      expect(winner!.experienceValue).toBe(winnerXpBefore + loserXp)
+      expect(loser!.experienceValue).toBe(0)
+      expect(loser!.goldValue).toBe(0)
+      expect(run.bracket!.rounds[1]![1]).toBe(2)
     })
 
-    it('merges experience the same way it merges traits when one enemy defeats another', () => {
-      const store = useRunStore()
-      store.ladder[1]!.baseStats.damage = 1000
-      const winnerXpBefore = store.ladder[1]!.experienceValue
-      const loserXp = store.ladder[2]!.experienceValue
+    it('does not duel the enemy currently engaged by the champion', () => {
+      const { run } = setupRun()
+      run.champion.baseStats.damage = 0
+      run.champion.baseStats.hp = 100_000
+      const baselineTraits = [...run.champion.traits]
 
-      vi.advanceTimersByTime(1000)
-
-      expect(store.ladder[1]!.experienceValue).toBe(winnerXpBefore + loserXp)
-      expect(store.ladder[2]!.experienceValue).toBe(0)
-    })
-
-    it('does not tick the enemy currently engaged by the champion', () => {
-      const store = useRunStore()
-      const baselineTraits = [...store.ladder[0]!.traits]
-
+      run.commitToFight()
+      const engaged = run.bracket!.combatants[1]!
+      const engagedTraits = [...engaged.traits]
       vi.advanceTimersByTime(60_000)
 
-      expect(store.ladder[0]!.traits).toEqual(baselineTraits)
+      expect(engaged.traits).toEqual(engagedTraits)
+      expect(run.bracket!.rounds[1]![0]).toBeUndefined()
+      expect(run.champion.traits).toEqual(baselineTraits)
     })
 
-    it('stops ticking once the run has concluded', () => {
-      const store = useRunStore()
-      winWholeLadder(store)
-      expect(store.runStatus).toBe('victorious')
+    it('stops duelling once the run has concluded', () => {
+      const stores = setupRun()
+      loseFirstFight(stores)
+      expect(stores.run.runStatus).toBe('defeated')
 
-      const traitsAfterVictory = [...store.ladder[4]!.traits]
+      const snapshot = JSON.stringify(stores.run.bracket)
       vi.advanceTimersByTime(60_000)
 
-      expect(store.ladder[4]!.traits).toEqual(traitsAfterVictory)
+      expect(JSON.stringify(stores.run.bracket)).toBe(snapshot)
     })
 
-    it('wipes ecosystem-earned traits on restart', () => {
-      const store = useRunStore()
-      store.ladder[1]!.baseStats.damage = 1000
-      vi.advanceTimersByTime(1000)
-      expect(store.ladder[1]!.traits.length).toBeGreaterThan(1)
+    it('wipes ecosystem-earned traits and experience on restart', () => {
+      const stores = setupRun()
+      stores.setup.didPlaceType(1, 'raider')
+      progressOf(stores.progression, 'raider').baseStats.damage = 1000
+      loseFirstFight(stores)
+      const duelled = stores.run.bracket!.combatants[2]!
+      expect(duelled.traits.length).toBeGreaterThan(1)
 
-      loseRun(store)
-      expect(store.runStatus).toBe('defeated')
+      stores.run.restart()
 
-      vi.advanceTimersByTime(FIGHT_COOLDOWN_MS)
-
-      expect(store.ladder[1]!.traits).toEqual([{ stat: 'attackSpeed', amount: 0.1 }])
-    })
-
-    it('wipes ecosystem-earned experience on restart', () => {
-      const store = useRunStore()
-      const baseXp = store.ladder[1]!.experienceValue
-      store.ladder[1]!.baseStats.damage = 1000
-      vi.advanceTimersByTime(1000)
-      expect(store.ladder[1]!.experienceValue).toBeGreaterThan(baseXp)
-
-      loseRun(store)
-      expect(store.runStatus).toBe('defeated')
-
-      vi.advanceTimersByTime(FIGHT_COOLDOWN_MS)
-
-      expect(store.ladder[1]!.experienceValue).toBe(baseXp)
+      const fresh = stores.run.bracket!.combatants[2]!
+      expect(fresh.traits).toEqual([findEnemyType('raider')!.trait])
+      expect(fresh.experienceValue).toBe(findEnemyType('raider')!.experienceValue)
     })
   })
 
   describe('progression', () => {
-    it('grants experience scaled by the defeated enemys value and the rung reached, on a champion win', () => {
-      const store = useRunStore()
-      const progression = useProgressionStore()
-      store.champion.baseStats.damage = 1000
-      const expectedReward = experienceReward(store.currentEnemy.experienceValue, store.rungIndex)
+    it('grants experience scaled by the defeated enemys value and the round reached, on a champion win', () => {
+      const { run, progression } = setupRun()
+      makeChampionUnkillable(run)
+      run.commitToFight()
+      const expectedReward = experienceReward(run.currentEnemy!.experienceValue, run.roundIndex)
 
-      store.commitToFight()
       vi.advanceTimersByTime(1000)
 
-      expect(store.outcome).toBe('champion')
+      expect(run.outcome).toBe('champion')
       expect(progression.experience).toBe(expectedReward)
     })
 
     it('grants no experience on a champion loss', () => {
-      const store = useRunStore()
-      const progression = useProgressionStore()
-      store.champion.baseStats.damage = 5
-      store.champion.baseStats.hp = 10
-      store.currentEnemy.baseStats.damage = 1000
+      const stores = setupRun()
 
-      store.commitToFight()
-      vi.advanceTimersByTime(1000)
+      loseFirstFight(stores)
 
-      expect(store.outcome).toBe('enemy')
-      expect(progression.experience).toBe(0)
+      expect(stores.run.outcome).toBe('enemy')
+      expect(stores.progression.experience).toBe(0)
     })
 
     it('keeps experience already banked from earlier wins after a later loss ends the run', () => {
-      const store = useRunStore()
-      const progression = useProgressionStore()
-      store.champion.baseStats.damage = 1000
-      store.champion.baseStats.hp = 1000
-
-      store.commitToFight()
+      const { run, progression } = setupFastSecondRound()
+      run.commitToFight()
       vi.advanceTimersByTime(1000)
       const bankedAfterWin = progression.experience
       expect(bankedAfterWin).toBeGreaterThan(0)
 
-      store.champion.baseStats.damage = 5
-      store.champion.baseStats.hp = 10
-      store.currentEnemy.baseStats.damage = 1000
-      vi.advanceTimersByTime(FIGHT_COOLDOWN_MS + 1000)
+      run.champion.baseStats.damage = 1
+      run.champion.baseStats.hp = 1
+      vi.advanceTimersByTime(FIGHT_COOLDOWN_MS + 2000)
 
-      expect(store.outcome).toBe('enemy')
+      expect(run.outcome).toBe('enemy')
       expect(progression.experience).toBe(bankedAfterWin)
+    })
+
+    it('records the defeated Enemy type as beaten', () => {
+      const { run, progression } = setupRun('scout')
+      makeChampionUnkillable(run)
+      run.commitToFight()
+
+      vi.advanceTimersByTime(1000)
+
+      const index = ENEMY_CATALOG.findIndex((type) => type.id === 'scout')
+      expect(progression.enemyProgress[index]!.defeated).toBe(true)
+      expect(progression.enemyProgress[0]!.defeated).toBe(false)
     })
   })
 
   describe('gold and enemy upgrades', () => {
     it('exposes the current enemys Gold and Experience reward for display', () => {
-      const store = useRunStore()
-      const expectedExperience = experienceReward(
-        store.currentEnemy.experienceValue,
-        store.rungIndex,
-      )
-      const expectedGold = goldReward(store.currentEnemy.goldValue, store.rungIndex)
+      const { run } = setupRun()
+      run.commitToFight()
 
-      expect(store.currentEnemyRewards).toEqual({
-        experience: expectedExperience,
-        gold: expectedGold,
+      expect(run.currentEnemyRewards).toEqual({
+        experience: experienceReward(run.currentEnemy!.experienceValue, run.roundIndex),
+        gold: goldReward(run.currentEnemy!.goldValue, run.roundIndex),
       })
     })
 
-    it('grants Gold scaled by the defeated enemys value and the rung reached, on a champion win', () => {
-      const store = useRunStore()
-      const progression = useProgressionStore()
-      store.champion.baseStats.damage = 1000
-      const expectedGold = goldReward(store.currentEnemy.goldValue, store.rungIndex)
+    it('has no reward to display without an opponent', () => {
+      expect(useRunStore().currentEnemyRewards).toBeUndefined()
+    })
 
-      store.commitToFight()
+    it('grants Gold scaled by the defeated enemys value and the round reached, on a champion win', () => {
+      const { run, progression } = setupRun()
+      makeChampionUnkillable(run)
+      run.commitToFight()
+      const expectedGold = goldReward(run.currentEnemy!.goldValue, run.roundIndex)
+
       vi.advanceTimersByTime(1000)
 
-      expect(store.outcome).toBe('champion')
+      expect(run.outcome).toBe('champion')
       expect(progression.gold).toBe(expectedGold)
     })
 
-    it('rejects an Enemy Upgrade purchase for an Enemy not yet defeated', () => {
-      const store = useRunStore()
-      const progression = useProgressionStore()
-      const index = 0
-      const enemy = store.ladder[index]!
-      const originalDamage = enemy.baseStats.damage
+    it('rejects an Enemy Upgrade purchase for a type not yet defeated', () => {
+      const { run, progression } = setupRun()
       progression.gold = 1_000_000
 
-      const purchased = store.didPurchaseEnemyUpgrade(index)
-
-      expect(purchased).toBe(false)
+      expect(run.didPurchaseEnemyUpgrade(0)).toBe(false)
       expect(progression.gold).toBe(1_000_000)
-      expect(enemy.baseStats.damage).toBe(originalDamage)
     })
 
-    it('applies an Enemy Upgrade for a defeated Enemy, deducting its cost from Gold', () => {
-      const store = useRunStore()
-      const progression = useProgressionStore()
-      store.champion.baseStats.damage = 1000
-
-      store.commitToFight()
+    it('applies an Enemy Upgrade for a defeated type, deducting its cost from Gold', () => {
+      const { run, progression } = setupRun()
+      makeChampionUnkillable(run)
+      run.commitToFight()
       vi.advanceTimersByTime(1000)
-      expect(store.outcome).toBe('champion')
+      expect(run.outcome).toBe('champion')
 
-      const index = 0
-      const cost = store.upgradeCostOf(index)
-      progression.gold = cost
+      progression.gold = run.upgradeCostOf(0)
 
-      const purchased = store.didPurchaseEnemyUpgrade(index)
-
-      expect(purchased).toBe(true)
+      expect(run.didPurchaseEnemyUpgrade(0)).toBe(true)
       expect(progression.gold).toBe(0)
     })
 
-    it("raises the upgraded Enemy's stats and reward, reflected in a subsequent Fight", () => {
-      const store = useRunStore()
-      const progression = useProgressionStore()
-      store.champion.baseStats.damage = 1000
-      store.champion.baseStats.hp = 1000
-
-      store.commitToFight()
+    it('pays off in the next run, with a stronger Enemy of that type and Gold kept across the restart', () => {
+      const { run, progression } = setupRun()
+      makeChampionUnkillable(run)
+      run.commitToFight()
       vi.advanceTimersByTime(1000)
-      expect(store.outcome).toBe('champion')
-
-      const index = 0
-      const enemy = store.ladder[index]!
-      const statsBeforeUpgrade = applyTraits(enemy.baseStats, enemy.traits)
-      const goldValueBeforeUpgrade = enemy.goldValue
-      const experienceValueBeforeUpgrade = enemy.experienceValue
-
-      progression.gold = store.upgradeCostOf(index)
-      expect(store.didPurchaseEnemyUpgrade(index)).toBe(true)
-
-      const statsAfterUpgrade = applyTraits(enemy.baseStats, enemy.traits)
-      expect(statsAfterUpgrade.damage).toBeGreaterThan(statsBeforeUpgrade.damage)
-      expect(statsAfterUpgrade.hp).toBeGreaterThan(statsBeforeUpgrade.hp)
-      expect(enemy.goldValue).toBeGreaterThan(goldValueBeforeUpgrade)
-      expect(enemy.experienceValue).toBeGreaterThan(experienceValueBeforeUpgrade)
-
-      const rematch = createFight({ attackSpeed: 1, damage: 0, hp: 10_000 }, statsAfterUpgrade)
-      advanceFight(rematch, 1000)
-      expect(10_000 - rematch.champion.currentHp).toBeCloseTo(statsAfterUpgrade.damage)
-    })
-
-    it('persists Gold and a purchased Enemy Upgrade across a restart', () => {
-      const store = useRunStore()
-      const progression = useProgressionStore()
-      store.champion.baseStats.damage = 1000
-
-      store.commitToFight()
-      vi.advanceTimersByTime(1000)
-      expect(store.outcome).toBe('champion')
-
-      const index = 0
-      progression.gold = store.upgradeCostOf(index)
-      expect(store.didPurchaseEnemyUpgrade(index)).toBe(true)
+      const damageBefore = run.bracket!.combatants[1]!.baseStats.damage
+      progression.gold = run.upgradeCostOf(0)
+      expect(run.didPurchaseEnemyUpgrade(0)).toBe(true)
       const goldAfterPurchase = progression.gold
-      const upgradedDamage = store.ladder[index]!.baseStats.damage
 
-      store.champion.baseStats.damage = 5
-      store.champion.baseStats.hp = 10
-      store.currentEnemy.baseStats.damage = 1000
-      vi.advanceTimersByTime(FIGHT_COOLDOWN_MS + 1000)
-      expect(store.runStatus).toBe('defeated')
-
-      vi.advanceTimersByTime(FIGHT_COOLDOWN_MS)
+      run.champion.baseStats.damage = 1
+      run.champion.baseStats.hp = 1
+      vi.advanceTimersByTime(FIGHT_COOLDOWN_MS + 60_000)
+      expect(run.runStatus).toBe('defeated')
+      run.restart()
 
       expect(progression.gold).toBe(goldAfterPurchase)
-      expect(store.ladder[index]!.baseStats.damage).toBe(upgradedDamage)
-
-      progression.gold = store.upgradeCostOf(index)
-      expect(store.didPurchaseEnemyUpgrade(index)).toBe(true)
+      expect(run.bracket!.combatants[1]!.baseStats.damage).toBeGreaterThan(damageBefore)
     })
   })
 
   describe('automatic fight chaining', () => {
-    it('starts the next rungs fight on its own once the cooldown after a win elapses', () => {
-      const store = useRunStore()
-      store.champion.baseStats.damage = 1000
-      store.champion.baseStats.hp = 1000
-
-      store.commitToFight()
+    it('starts the next rounds fight on its own once the cooldown after a win elapses', () => {
+      const { run } = setupFastSecondRound()
+      run.commitToFight()
       vi.advanceTimersByTime(1000)
-      expect(store.outcome).toBe('champion')
-      expect(store.isFighting).toBe(false)
+      expect(run.outcome).toBe('champion')
+      expect(run.isFighting).toBe(false)
 
       vi.advanceTimersByTime(FIGHT_COOLDOWN_MS)
 
-      expect(store.isFighting).toBe(true)
-      expect(store.rungIndex).toBe(1)
-    })
-
-    it('ignores committing again while a run is in progress', () => {
-      const store = useRunStore()
-      store.champion.baseStats.damage = 1000
-      store.champion.baseStats.hp = 1000
-
-      store.commitToFight()
-      vi.advanceTimersByTime(1000)
-      store.commitToFight()
-
-      expect(store.isFighting).toBe(false)
-      expect(store.rungIndex).toBe(1)
+      expect(run.isFighting).toBe(true)
+      expect(run.roundIndex).toBe(1)
     })
   })
 
   describe('cooldown progress', () => {
     it('is zero outside a cooldown', () => {
-      const store = useRunStore()
-      expect(store.cooldownProgress).toBe(0)
+      const { run } = setupRun()
+      expect(run.cooldownProgress).toBe(0)
 
-      store.champion.baseStats.damage = 1000
-      store.commitToFight()
+      makeChampionUnkillable(run)
+      run.commitToFight()
       vi.advanceTimersByTime(500)
 
-      expect(store.cooldownProgress).toBe(0)
+      expect(run.cooldownProgress).toBe(0)
     })
 
     it('fills toward 1 over the cooldown after a win', () => {
-      const store = useRunStore()
-      store.champion.baseStats.damage = 1000
-      store.commitToFight()
+      const { run } = setupRun()
+      makeChampionUnkillable(run)
+      run.commitToFight()
       vi.advanceTimersByTime(1000)
-      expect(store.cooldownProgress).toBeCloseTo(0, 1)
+      expect(run.cooldownProgress).toBeCloseTo(0, 1)
 
       vi.advanceTimersByTime(500)
 
-      expect(store.cooldownProgress).toBeCloseTo(0.5, 1)
+      expect(run.cooldownProgress).toBeCloseTo(0.5, 1)
     })
 
-    it('fills over the cooldown after a loss and empties once the run restarts', () => {
-      const store = useRunStore()
-      loseRun(store)
+    it('is zero after a loss, since the run simply ends', () => {
+      const stores = setupRun()
 
-      vi.advanceTimersByTime(500)
-      expect(store.cooldownProgress).toBeCloseTo(0.5, 1)
+      loseFirstFight(stores)
 
-      vi.advanceTimersByTime(FIGHT_COOLDOWN_MS)
-      expect(store.cooldownProgress).toBe(0)
+      expect(stores.run.cooldownProgress).toBe(0)
     })
 
     it('is zero once the next fight starts', () => {
-      const store = useRunStore()
-      store.champion.baseStats.damage = 1000
-      store.champion.baseStats.hp = 1000
-      store.commitToFight()
+      const { run } = setupFastSecondRound()
+      run.commitToFight()
       vi.advanceTimersByTime(1000 + FIGHT_COOLDOWN_MS)
 
-      expect(store.isFighting).toBe(true)
-      expect(store.cooldownProgress).toBe(0)
+      expect(run.isFighting).toBe(true)
+      expect(run.cooldownProgress).toBe(0)
     })
   })
 
-  describe('restart after defeat', () => {
-    it('automatically returns to the start of the ladder with a fresh champion, granting nothing', () => {
-      const store = useRunStore()
-      const progression = useProgressionStore()
+  describe('restart', () => {
+    it('is refused while a run is in progress', () => {
+      const { run } = setupRun()
+      run.commitToFight()
+      const bracket = run.bracket
 
-      loseRun(store)
-      expect(store.runStatus).toBe('defeated')
-      vi.advanceTimersByTime(FIGHT_COOLDOWN_MS)
+      run.restart()
 
-      expect(store.runStatus).toBe('active')
-      expect(store.rungIndex).toBe(0)
-      expect(store.champion.traits).toEqual([])
-      expect(store.champion.baseStats).toEqual({ attackSpeed: 1, damage: 20, hp: 200 })
-      expect(store.outcome).toBeUndefined()
-      expect(progression.prestigeTokens).toBe(0)
-      expect(progression.ladderLevel).toBe(0)
+      expect(run.bracket).toBe(bracket)
     })
 
-    it('waits for the player to commit before fighting again', () => {
-      const store = useRunStore()
+    it('is refused before any run has started', () => {
+      const { run } = setupRun()
 
-      loseRun(store)
-      vi.advanceTimersByTime(FIGHT_COOLDOWN_MS + 5000)
+      run.restart()
 
-      expect(store.isFighting).toBe(false)
-
-      store.champion.baseStats.damage = 1000
-      store.commitToFight()
-      vi.advanceTimersByTime(1000)
-
-      expect(store.outcome).toBe('champion')
+      expect(run.runStatus).toBe('setup')
+      expect(run.bracket).toBeUndefined()
     })
 
-    it('leaves Ladder difficulty unchanged', () => {
-      const store = useRunStore()
+    it('begins a fresh run at once with the same setup after a defeat, granting nothing', () => {
+      const stores = setupRun()
+      loseFirstFight(stores)
+      expect(stores.run.runStatus).toBe('defeated')
 
-      loseRun(store)
-      vi.advanceTimersByTime(FIGHT_COOLDOWN_MS)
+      stores.run.restart()
 
-      expect(store.ladder[0]!.baseStats.damage).toBe(8)
-      expect(store.ladder[0]!.baseStats.hp).toBe(100)
+      expect(stores.run.runStatus).toBe('active')
+      expect(stores.run.roundIndex).toBe(0)
+      expect(stores.run.champion.traits).toEqual([])
+      expect(stores.run.champion.baseStats).toEqual({ attackSpeed: 1, damage: 20, hp: 200 })
+      expect(stores.run.outcome).toBeUndefined()
+      expect(stores.run.isFighting).toBe(true)
+      expect(stores.setup.isLocked).toBe(true)
+      expect(stores.setup.placement.every((slot) => slot === 'grunt')).toBe(true)
+      expect(stores.progression.prestigeTokens).toBe(0)
+      expect(stores.progression.ladderLevel).toBe(0)
+    })
+
+    it('is offered after a victory too, and grants no prestige', () => {
+      const stores = setupRun()
+      winWholeBracket(stores)
+      expect(stores.run.runStatus).toBe('victorious')
+
+      stores.run.restart()
+
+      expect(stores.run.runStatus).toBe('active')
+      expect(stores.run.roundIndex).toBe(0)
+      expect(stores.progression.prestigeTokens).toBe(0)
+    })
+
+    it('leaves enemy difficulty unchanged', () => {
+      const stores = setupRun()
+      loseFirstFight(stores)
+      progressOf(stores.progression, 'grunt').baseStats.damage = 8
+
+      stores.run.restart()
+
+      expect(stores.run.bracket!.combatants[1]!.baseStats.damage).toBe(8)
+      expect(stores.run.bracket!.combatants[1]!.baseStats.hp).toBe(100)
+    })
+  })
+
+  describe('edit', () => {
+    it('is refused while a run is in progress', () => {
+      const { run, setup } = setupRun()
+      run.commitToFight()
+
+      run.edit()
+
+      expect(run.runStatus).toBe('active')
+      expect(setup.isLocked).toBe(true)
+    })
+
+    it('returns to setup with the placement kept and editable, and a fresh champion', () => {
+      const stores = setupRun()
+      loseFirstFight(stores)
+
+      stores.run.edit()
+
+      expect(stores.run.runStatus).toBe('setup')
+      expect(stores.run.bracket).toBeUndefined()
+      expect(stores.run.outcome).toBeUndefined()
+      expect(stores.run.champion.baseStats).toEqual({ attackSpeed: 1, damage: 20, hp: 200 })
+      expect(stores.setup.isLocked).toBe(false)
+      expect(stores.setup.placement.every((slot) => slot === 'grunt')).toBe(true)
+    })
+
+    it('lets the player revise the placement and commit a different bracket', () => {
+      const stores = setupRun()
+      loseFirstFight(stores)
+      stores.run.edit()
+
+      stores.setup.didPlaceType(0, 'scout')
+      stores.run.commitToFight()
+
+      expect(stores.run.runStatus).toBe('active')
+      expect(stores.run.bracket!.combatants[1]!.baseStats).toEqual(
+        findEnemyType('scout')!.baseStats,
+      )
+    })
+
+    it('stops all ticking while in setup', () => {
+      const stores = setupRun()
+      winWholeBracket(stores)
+      stores.run.edit()
+
+      vi.advanceTimersByTime(60_000)
+
+      expect(stores.run.isRunning).toBe(false)
+      expect(stores.run.isFighting).toBe(false)
     })
   })
 
   describe('prestige', () => {
     it('is refused while the run is still active', () => {
-      const store = useRunStore()
-      const progression = useProgressionStore()
+      const { run, progression } = setupRun()
+      run.commitToFight()
 
-      store.prestige()
+      run.prestige()
 
       expect(progression.prestigeTokens).toBe(0)
       expect(progression.ladderLevel).toBe(0)
+      expect(run.runStatus).toBe('active')
     })
 
     it('is refused after a defeat', () => {
-      const store = useRunStore()
-      const progression = useProgressionStore()
+      const stores = setupRun()
 
-      loseRun(store)
-      store.prestige()
+      loseFirstFight(stores)
+      stores.run.prestige()
 
-      expect(progression.prestigeTokens).toBe(0)
-      expect(progression.ladderLevel).toBe(0)
+      expect(stores.progression.prestigeTokens).toBe(0)
+      expect(stores.progression.ladderLevel).toBe(0)
+      expect(stores.run.runStatus).toBe('defeated')
     })
 
-    it('grants one prestige token and one Ladder Level after the final rung is cleared, and restarts the run', () => {
-      const store = useRunStore()
-      const progression = useProgressionStore()
-      winWholeLadder(store)
-      expect(store.runStatus).toBe('victorious')
+    it('grants one prestige token and one Ladder Level after the final round is won, and returns to setup', () => {
+      const stores = setupRun()
+      winWholeBracket(stores)
+      expect(stores.run.runStatus).toBe('victorious')
 
-      store.prestige()
+      stores.run.prestige()
 
-      expect(progression.prestigeTokens).toBe(1)
-      expect(progression.ladderLevel).toBe(1)
-      expect(store.runStatus).toBe('active')
-      expect(store.rungIndex).toBe(0)
-      expect(store.champion.traits).toEqual([])
+      expect(stores.progression.prestigeTokens).toBe(1)
+      expect(stores.progression.ladderLevel).toBe(1)
+      expect(stores.run.runStatus).toBe('setup')
+      expect(stores.run.roundIndex).toBe(0)
+      expect(stores.run.champion.traits).toEqual([])
+      expect(stores.setup.isLocked).toBe(false)
+      expect(stores.setup.placement.every((slot) => slot === 'grunt')).toBe(true)
     })
 
-    it('raises every enemys damage and hp on the fresh ladder', () => {
-      const store = useRunStore()
-      winWholeLadder(store)
+    it('raises every enemys damage and hp in the next bracket', () => {
+      const stores = setupRun()
+      stores.setup.didPlaceType(14, 'raider')
+      winWholeBracket(stores)
+      stores.run.prestige()
 
-      store.prestige()
+      stores.run.commitToFight()
 
-      expect(store.ladder[0]!.baseStats.damage).toBeCloseTo(9.2)
-      expect(store.ladder[0]!.baseStats.hp).toBeCloseTo(115)
-      expect(store.ladder[4]!.baseStats.damage).toBeCloseTo(23)
-      expect(store.ladder[4]!.baseStats.hp).toBeCloseTo(276)
+      expect(stores.run.bracket!.combatants[1]!.baseStats.damage).toBeCloseTo(9.2)
+      expect(stores.run.bracket!.combatants[1]!.baseStats.hp).toBeCloseTo(115)
+      expect(stores.run.bracket!.combatants[15]!.baseStats.damage).toBeCloseTo(23)
+      expect(stores.run.bracket!.combatants[15]!.baseStats.hp).toBeCloseTo(276)
     })
 
     it('stacks the Ladder Level multiplier on top of a purchased Enemy Upgrade', () => {
-      const store = useRunStore()
-      const progression = useProgressionStore()
-      winWholeLadder(store)
-      progression.gold = store.upgradeCostOf(0)
-      expect(store.didPurchaseEnemyUpgrade(0)).toBe(true)
+      const stores = setupRun()
+      winWholeBracket(stores)
+      stores.progression.gold = stores.run.upgradeCostOf(0)
+      expect(stores.run.didPurchaseEnemyUpgrade(0)).toBe(true)
+      stores.run.prestige()
 
-      store.prestige()
+      stores.run.commitToFight()
 
-      expect(store.ladder[0]!.baseStats.damage).toBeCloseTo(8 * 1.15 * 1.15)
+      expect(stores.run.bracket!.combatants[1]!.baseStats.damage).toBeCloseTo(8 * 1.15 * 1.15)
     })
 
     it('feeds Ladder Level into the displayed and granted rewards', () => {
-      const store = useRunStore()
-      const progression = useProgressionStore()
-      winWholeLadder(store)
-      store.prestige()
-      const experienceBefore = progression.experience
-      const goldBefore = progression.gold
+      const stores = setupRun()
+      winWholeBracket(stores)
+      stores.run.prestige()
+      const experienceBefore = stores.progression.experience
+      const goldBefore = stores.progression.gold
 
-      expect(store.currentEnemyRewards).toEqual({ experience: 20, gold: 30 })
+      makeChampionUnkillable(stores.run)
+      stores.run.commitToFight()
+      expect(stores.run.currentEnemyRewards).toEqual({ experience: 20, gold: 30 })
 
-      store.champion.baseStats.damage = 1000
-      store.commitToFight()
       vi.advanceTimersByTime(1000)
 
-      expect(store.outcome).toBe('champion')
-      expect(progression.experience - experienceBefore).toBe(20)
-      expect(progression.gold - goldBefore).toBe(30)
+      expect(stores.run.outcome).toBe('champion')
+      expect(stores.progression.experience - experienceBefore).toBe(20)
+      expect(stores.progression.gold - goldBefore).toBe(30)
     })
   })
 })
