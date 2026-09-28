@@ -16,6 +16,7 @@ import {
   CHAMPION_SLOT,
   type Bracket,
   type BracketCombatant,
+  type BracketMatch,
 } from '@/domain/ecosystem'
 import { ENEMY_CATALOG } from '@/domain/catalog'
 import { experienceReward } from '@/domain/experience'
@@ -96,6 +97,11 @@ export const useRunStore = defineStore('run', () => {
       ? liveMatches(bracket.value).find((match) => match.first === CHAMPION_SLOT)
       : undefined,
   )
+  const liveEnemyMatches = computed<BracketMatch[]>(() =>
+    bracket.value
+      ? liveMatches(bracket.value).filter((match) => match.first !== CHAMPION_SLOT)
+      : [],
+  )
   const currentEnemy = computed(() =>
     championMatch.value ? bracket.value!.combatants[championMatch.value.second] : undefined,
   )
@@ -121,7 +127,7 @@ export const useRunStore = defineStore('run', () => {
 
   function tickEcosystem(elapsedMs: number) {
     if (!bracket.value) return
-    const matches = liveMatches(bracket.value).filter((match) => match.first !== CHAMPION_SLOT)
+    const matches = liveEnemyMatches.value
     const liveKeys = new Set(matches.map((match) => ecosystemFightKey(match.round, match.index)))
 
     for (const key of ecosystemFights.keys()) {
@@ -331,6 +337,7 @@ export const useRunStore = defineStore('run', () => {
     currentEnemy,
     currentEnemyStats,
     currentEnemyRewards,
+    liveEnemyMatches,
     outcome,
     championHp,
     enemyHp,

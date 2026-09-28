@@ -28,6 +28,12 @@ export function bracketSize(levels: number): number {
   return 2 ** levels
 }
 
+export function bracketRoundSizes(levels: number): number[] {
+  const sizes: number[] = []
+  for (let size = bracketSize(levels); size >= 1; size /= 2) sizes.push(size)
+  return sizes
+}
+
 function isPowerOfTwo(count: number): boolean {
   return count >= 2 && (count & (count - 1)) === 0
 }

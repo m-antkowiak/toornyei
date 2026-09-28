@@ -6,6 +6,7 @@ import { useSetupStore, ENEMY_SLOT_COUNT } from '../setup'
 import { ENEMY_CATALOG, findEnemyType } from '@/domain/catalog'
 import { experienceReward } from '@/domain/experience'
 import { goldReward } from '@/domain/gold'
+import { CHAMPION_SLOT } from '@/domain/ecosystem'
 
 const FIGHT_COOLDOWN_MS = 1000
 const WHOLE_BRACKET_MS = 60_000
@@ -401,6 +402,28 @@ describe('run store', () => {
       expect(engaged.traits).toEqual(engagedTraits)
       expect(run.bracket!.rounds[1]![0]).toBeUndefined()
       expect(run.champion.traits).toEqual(baselineTraits)
+    })
+
+    it('exposes currently live non-Champion matches, and stops exposing them once resolved', () => {
+      const { run, setup, progression } = setupRun()
+      setup.didPlaceType(1, 'raider')
+      setup.didPlaceType(2, 'grunt')
+      progressOf(progression, 'raider').baseStats.damage = 1000
+      run.champion.baseStats.damage = 0
+      run.champion.baseStats.hp = 100_000
+
+      run.commitToFight()
+
+      expect(
+        run.liveEnemyMatches.some((match) => match.round === 0 && match.index === 1),
+      ).toBe(true)
+      expect(run.liveEnemyMatches.every((match) => match.first !== CHAMPION_SLOT)).toBe(true)
+
+      vi.advanceTimersByTime(1000)
+
+      expect(
+        run.liveEnemyMatches.some((match) => match.round === 0 && match.index === 1),
+      ).toBe(false)
     })
 
     it('stops duelling once the run has concluded', () => {

@@ -1,75 +1,23 @@
 <script setup lang="ts">
 import { useRunStore } from '@/stores/run'
-import { useProgressionStore } from '@/stores/progression'
-import { useSetupStore, BRACKET_LEVELS } from '@/stores/setup'
+import { useSetupStore } from '@/stores/setup'
 import { ENEMY_CATALOG } from '@/domain/catalog'
-import { formatNumber } from '@/domain/format'
-import { CHAMPION_UPGRADE_KINDS, type ChampionUpgradeKind } from '@/domain/championUpgrade'
+import BracketCanvas from '@/components/BracketCanvas.vue'
+import RunHud from '@/components/RunHud.vue'
 
 const run = useRunStore()
-const progression = useProgressionStore()
 const setup = useSetupStore()
-const isDev = import.meta.env.DEV
-
-const championUpgradeLabels: Record<ChampionUpgradeKind, string> = {
-  damage: 'Damage',
-  attackSpeed: 'Attack Speed',
-  hp: 'HP',
-}
-
-function hardReset() {
-  progression.hardReset()
-  window.location.reload()
-}
 </script>
 
 <template>
   <main class="fight-layout">
-    <section class="ladder-column">
-      <h2>Ladder</h2>
-      <ol class="stepper">
-        <li
-          v-for="index in BRACKET_LEVELS"
-          :key="index"
-          class="step"
-          :class="{
-            cleared: index - 1 < run.roundIndex,
-            current: index - 1 === run.roundIndex,
-            locked: index - 1 > run.roundIndex,
-          }"
-          :aria-current="index - 1 === run.roundIndex ? 'step' : undefined"
-        >
-          <div class="dot">{{ index }}</div>
-          <div v-if="index < BRACKET_LEVELS" class="connector" />
-        </li>
-      </ol>
-
-      <p v-if="run.isFighting" class="status">Fighting...</p>
-      <p v-else-if="run.runStatus === 'victorious'" class="status">
-        You cleared the Bracket! Restart, Edit your setup, or Prestige.
-      </p>
-      <p v-else-if="run.runStatus === 'defeated'" class="status">
-        Your Champion has fallen. Restart or Edit your setup.
-      </p>
-      <p v-else-if="run.isAwaitingOpponent" class="status">Awaiting the next opponent...</p>
-      <p v-else-if="run.outcome === 'champion'" class="status">Champion wins!</p>
-
-      <div v-if="run.cooldownProgress > 0" class="stat-row cooldown">
-        <span>Cooldown</span>
-        <div class="bar atk">
-          <div class="fill" :style="{ width: run.cooldownProgress * 100 + '%' }" />
-        </div>
-      </div>
-
-      <template v-if="run.runStatus === 'setup'">
+    <div class="main-column">
+      <section v-if="run.runStatus === 'setup'" class="setup-panel">
         <h2>Setup</h2>
         <ul class="upgrade-list">
           <li v-for="(typeId, slot) in setup.placement" :key="slot" class="upgrade-row">
             <span>Slot {{ slot + 2 }}</span>
-            <select
-              :value="typeId ?? ''"
-              @change="setup.didPlaceType(slot, ($event.target as HTMLSelectElement).value)"
-            >
+            <select :value="typeId ?? ''" @change="setup.didPlaceType(slot, ($event.target as HTMLSelectElement).value)">
               <option value="" disabled>Choose an Enemy</option>
               <option v-for="type in ENEMY_CATALOG" :key="type.id" :value="type.id">
                 {{ type.name }}
@@ -78,144 +26,12 @@ function hardReset() {
           </li>
         </ul>
         <button :disabled="!setup.isComplete" @click="run.commitToFight()">Commit to Fight</button>
-      </template>
-      <template v-else-if="run.runStatus !== 'active'">
-        <button @click="run.restart()">Restart</button>
-        <button @click="run.edit()">Edit</button>
-        <button v-if="run.runStatus === 'victorious'" @click="run.prestige()">Prestige</button>
-      </template>
-
-      <h2>Champion Upgrades</h2>
-      <ul class="upgrade-list">
-        <li v-for="kind in CHAMPION_UPGRADE_KINDS" :key="kind" class="upgrade-row">
-          <span
-            >{{ championUpgradeLabels[kind] }} (Lv {{ progression.championUpgrades[kind] }})</span
-          >
-          <button
-            :disabled="progression.experience < progression.championUpgradeCostOf(kind)"
-            @click="progression.didPurchaseChampionUpgrade(kind)"
-          >
-            Upgrade ({{ formatNumber(progression.championUpgradeCostOf(kind)) }} exp)
-          </button>
-        </li>
-      </ul>
-
-      <button v-if="isDev" @click="hardReset()">Dev: hard reset everything</button>
-
-      <h2>Meta Unlocks</h2>
-      <ul class="upgrade-list">
-        <li v-for="unlock in progression.metaUnlocks" :key="unlock.id" class="upgrade-row">
-          <span>{{ unlock.id }}</span>
-          <span v-if="unlock.unlocked">Unlocked</span>
-          <button
-            v-else
-            :disabled="progression.prestigeTokens < 1"
-            @click="progression.didPurchaseMetaUnlock(unlock.id)"
-          >
-            Unlock (1 token)
-          </button>
-        </li>
-      </ul>
-    </section>
-
-    <aside class="stat-rail">
-      <section class="panel">
-        <h2>Progression</h2>
-        <div class="stat-row">
-          <span>Experience</span>
-          <span class="value">{{ formatNumber(progression.experience) }}</span>
-        </div>
-        <div class="stat-row">
-          <span>Gold</span>
-          <span class="value">{{ formatNumber(progression.gold) }}</span>
-        </div>
-        <div class="stat-row">
-          <span>Prestige Tokens</span>
-          <span class="value">{{ formatNumber(progression.prestigeTokens) }}</span>
-        </div>
-        <div class="stat-row">
-          <span>Ladder Level</span>
-          <span class="value">{{ formatNumber(progression.ladderLevel) }}</span>
-        </div>
       </section>
 
-      <section class="panel">
-        <h2>Champion</h2>
-        <div class="stat-row">
-          <span>HP</span>
-          <div class="bar">
-            <div
-              class="fill"
-              :style="{ width: (run.championHp / run.championStats.hp) * 100 + '%' }"
-            />
-          </div>
-          <span class="value"
-            >{{ formatNumber(run.championHp) }}/{{ formatNumber(run.championStats.hp) }}</span
-          >
-        </div>
-        <div class="stat-row">
-          <span>Damage</span>
-          <span class="value">{{ formatNumber(run.championStats.damage) }}</span>
-        </div>
-        <div class="stat-row">
-          <span>Attack Speed</span>
-          <span class="value">{{ formatNumber(run.championStats.attackSpeed, 2) }}</span>
-        </div>
-        <div v-if="run.isFighting" class="stat-row">
-          <span>Attack</span>
-          <div class="bar atk">
-            <div class="fill" :style="{ width: run.championAttackProgress * 100 + '%' }" />
-          </div>
-        </div>
-        <div v-if="run.champion.traits.length > 0" class="traits">
-          <span v-for="trait in run.champion.traits" :key="trait.stat"
-            >{{ trait.stat }} +{{ formatNumber(trait.amount, 2) }}</span
-          >
-        </div>
-      </section>
+      <BracketCanvas />
+    </div>
 
-      <section
-        v-if="run.currentEnemy && run.currentEnemyStats && run.currentEnemyRewards"
-        class="panel enemy"
-      >
-        <h2>Enemy · Round {{ run.roundIndex + 1 }}</h2>
-        <div class="stat-row">
-          <span>HP</span>
-          <div class="bar">
-            <div
-              class="fill"
-              :style="{ width: (run.enemyHp / run.currentEnemyStats.hp) * 100 + '%' }"
-            />
-          </div>
-          <span class="value"
-            >{{ formatNumber(run.enemyHp) }}/{{ formatNumber(run.currentEnemyStats.hp) }}</span
-          >
-        </div>
-        <div class="stat-row">
-          <span>Damage</span>
-          <span class="value">{{ formatNumber(run.currentEnemyStats.damage) }}</span>
-        </div>
-        <div class="stat-row">
-          <span>Attack Speed</span>
-          <span class="value">{{ formatNumber(run.currentEnemyStats.attackSpeed, 2) }}</span>
-        </div>
-        <div v-if="run.isFighting" class="stat-row">
-          <span>Attack</span>
-          <div class="bar atk">
-            <div class="fill" :style="{ width: run.enemyAttackProgress * 100 + '%' }" />
-          </div>
-        </div>
-        <div v-if="run.currentEnemy.traits.length > 0" class="traits">
-          <span v-for="trait in run.currentEnemy.traits" :key="trait.stat"
-            >{{ trait.stat }} +{{ formatNumber(trait.amount, 2) }}</span
-          >
-        </div>
-        <div class="traits">
-          <span>exp +{{ formatNumber(run.currentEnemyRewards.experience) }}</span>
-          <span>gold +{{ formatNumber(run.currentEnemyRewards.gold) }}</span>
-        </div>
-      </section>
-    </aside>
+    <RunHud />
   </main>
 </template>
 
@@ -224,77 +40,36 @@ function hardReset() {
   display: flex;
   gap: 1.5rem;
   align-items: flex-start;
+  height: calc(100vh - 8rem);
 }
 
-.ladder-column {
+.main-column {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: 100%;
 }
 
-.stepper {
-  display: flex;
-  align-items: center;
-  margin: 1rem 0;
-  overflow-x: auto;
-  padding-bottom: 0.5rem;
-  list-style: none;
+.setup-panel {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.9rem;
 }
 
-.step {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.dot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 999px;
-  border: 2px solid var(--color-border);
+.setup-panel h2 {
   font-size: 0.8rem;
-  font-weight: bold;
-  flex-shrink: 0;
-}
-
-.step.cleared .dot {
-  background: hsla(160, 100%, 37%, 0.2);
-  border-color: hsla(160, 100%, 37%, 1);
-}
-
-.step.current .dot {
-  background: rgba(179, 51, 51, 0.15);
-  border-color: #b33;
-  box-shadow: 0 0 0 4px rgba(179, 51, 51, 0.12);
-}
-
-.step.locked .dot {
-  opacity: 0.5;
-}
-
-.connector {
-  width: 2rem;
-  height: 2px;
-  background: var(--color-border);
-  flex-shrink: 0;
-}
-
-.step.cleared .connector {
-  background: hsla(160, 100%, 37%, 0.6);
-}
-
-.status {
-  margin: 0.75rem 0;
+  opacity: 0.7;
+  margin-bottom: 0.6rem;
 }
 
 .upgrade-list {
   list-style: none;
-  margin-top: 0.75rem;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+  margin-bottom: 0.75rem;
 }
 
 .upgrade-row {
@@ -305,103 +80,10 @@ function hardReset() {
   font-size: 0.85rem;
 }
 
-.stat-rail {
-  width: 15rem;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  position: sticky;
-  top: 1.5rem;
-}
-
-.panel {
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 0.9rem;
-}
-
-.panel.enemy {
-  border-color: #b33;
-}
-
-.panel h2 {
-  font-size: 0.8rem;
-  opacity: 0.7;
-  margin-bottom: 0.6rem;
-}
-
-.stat-row {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.8rem;
-  margin-bottom: 0.4rem;
-}
-
-.stat-row span:first-child {
-  width: 5.5rem;
-  flex-shrink: 0;
-  opacity: 0.7;
-}
-
-.stat-row .value {
-  margin-left: auto;
-  font-weight: 600;
-}
-
-.bar {
-  flex: 1;
-  height: 6px;
-  background: var(--color-background-mute);
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.bar.atk {
-  height: 4px;
-}
-
-.fill {
-  height: 100%;
-  background: hsla(160, 100%, 37%, 1);
-}
-
-.bar.atk .fill {
-  transition: width 0.1s linear;
-}
-
-.cooldown .fill {
-  background: var(--color-text);
-  opacity: 0.5;
-}
-
-.panel.enemy .fill {
-  background: #b33;
-}
-
-.traits {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  margin-top: 0.5rem;
-}
-
-.traits span {
-  background: var(--color-background-mute);
-  border-radius: 4px;
-  padding: 0.1rem 0.4rem;
-  font-size: 0.75rem;
-}
-
 @media (max-width: 640px) {
   .fight-layout {
     flex-direction: column;
-  }
-
-  .stat-rail {
-    width: 100%;
-    position: static;
+    height: auto;
   }
 }
 </style>

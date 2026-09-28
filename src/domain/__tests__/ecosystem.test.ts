@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   createBracket,
   bracketSize,
+  bracketRoundSizes,
   liveMatches,
   didResolveMatch,
   roundSurvivors,
@@ -26,6 +27,17 @@ describe('bracket', () => {
   describe('bracketSize', () => {
     it('doubles the participants with every level', () => {
       expect([1, 2, 3, 4, 5].map((levels) => bracketSize(levels))).toEqual([2, 4, 8, 16, 32])
+    })
+  })
+
+  describe('bracketRoundSizes', () => {
+    it('halves down from the full bracket to the single overall winner slot', () => {
+      expect(bracketRoundSizes(4)).toEqual([16, 8, 4, 2, 1])
+    })
+
+    it('matches the round lengths a real bracket of the same size produces', () => {
+      const bracket = createBracket(combatants(8))
+      expect(bracketRoundSizes(3)).toEqual(bracket.rounds.map((round) => round.length))
     })
   })
 
