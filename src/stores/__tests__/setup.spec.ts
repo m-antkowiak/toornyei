@@ -9,19 +9,25 @@ function fillEverySlot(store: ReturnType<typeof useSetupStore>, typeId = 'grunt'
   }
 }
 
+function clearEverySlot(store: ReturnType<typeof useSetupStore>) {
+  for (let slot = 0; slot < ENEMY_SLOT_COUNT; slot++) {
+    store.didClearSlot(slot)
+  }
+}
+
 describe('setup store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
   })
 
-  it('starts with an empty slot for every Enemy but the Champion, and nothing locked', () => {
+  it('starts with a Grunt in every Enemy slot, complete, and nothing locked', () => {
     const store = useSetupStore()
 
     expect(ENEMY_SLOT_COUNT).toBe(2 ** BRACKET_LEVELS - 1)
     expect(store.placement).toHaveLength(ENEMY_SLOT_COUNT)
-    expect(store.placement.every((slot) => slot === undefined)).toBe(true)
+    expect(store.placement.every((slot) => slot === 'grunt')).toBe(true)
     expect(store.isLocked).toBe(false)
-    expect(store.isComplete).toBe(false)
+    expect(store.isComplete).toBe(true)
   })
 
   describe('placement', () => {
@@ -53,6 +59,7 @@ describe('setup store', () => {
 
     it('rejects an unknown type', () => {
       const store = useSetupStore()
+      clearEverySlot(store)
 
       expect(store.didPlaceType(0, 'nope')).toBe(false)
       expect(store.placement[0]).toBeUndefined()
@@ -78,6 +85,7 @@ describe('setup store', () => {
 
     it('is complete only once every slot is filled', () => {
       const store = useSetupStore()
+      clearEverySlot(store)
       for (let slot = 0; slot < ENEMY_SLOT_COUNT - 1; slot++) store.didPlaceType(slot, 'grunt')
       expect(store.isComplete).toBe(false)
 
@@ -90,6 +98,7 @@ describe('setup store', () => {
   describe('locking', () => {
     it('blocks placing and clearing while locked, leaving the placement untouched', () => {
       const store = useSetupStore()
+      clearEverySlot(store)
       store.didPlaceType(0, 'grunt')
       store.lockPlacement()
 
@@ -115,6 +124,7 @@ describe('setup store', () => {
   describe('bracket combatants', () => {
     it('builds nothing while the placement is incomplete', () => {
       const store = useSetupStore()
+      clearEverySlot(store)
       store.didPlaceType(0, 'grunt')
 
       expect(store.buildCombatants()).toBeUndefined()
@@ -246,6 +256,7 @@ describe('setup store', () => {
   describe('persistence', () => {
     it('keeps saved setups across a reload', () => {
       const first = useSetupStore()
+      clearEverySlot(first)
       first.didPlaceType(0, 'warden')
       first.didSaveSetup('mine')
 
@@ -261,13 +272,14 @@ describe('setup store', () => {
 
     it('does not persist the working placement or the lock', () => {
       const first = useSetupStore()
+      clearEverySlot(first)
       first.didPlaceType(0, 'warden')
       first.lockPlacement()
 
       setActivePinia(createPinia())
       const reloaded = useSetupStore()
 
-      expect(reloaded.placement[0]).toBeUndefined()
+      expect(reloaded.placement[0]).toBe('grunt')
       expect(reloaded.isLocked).toBe(false)
     })
 

@@ -75,7 +75,7 @@ describe('run store', () => {
     it('refuses to commit while the placement is incomplete', () => {
       const run = useRunStore()
       const setup = useSetupStore()
-      setup.didPlaceType(0, 'grunt')
+      setup.didClearSlot(0)
 
       run.commitToFight()
 

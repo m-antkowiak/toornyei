@@ -6,6 +6,7 @@ import { bracketSize, type BracketCombatant } from '@/domain/ecosystem'
 export const BRACKET_LEVELS = 2
 export const ENEMY_SLOT_COUNT = bracketSize(BRACKET_LEVELS) - 1
 
+const DEFAULT_ENEMY_TYPE_ID = 'grunt'
 const SETUPS_STORAGE_KEY = 'toornyei:setups'
 
 export type Placement = Array<string | undefined>
@@ -26,6 +27,10 @@ function isSlotInBracket(slot: number): boolean {
 
 function createEmptyPlacement(): Placement {
   return Array.from<string | undefined>({ length: ENEMY_SLOT_COUNT })
+}
+
+function createDefaultPlacement(): Placement {
+  return Array.from<string | undefined, string>({ length: ENEMY_SLOT_COUNT }, () => DEFAULT_ENEMY_TYPE_ID)
 }
 
 function parsePlacement(raw: unknown): Placement | undefined {
@@ -67,7 +72,7 @@ function persistSavedSetups(setups: SavedSetup[]) {
 }
 
 export const useSetupStore = defineStore('setup', () => {
-  const placement = ref<Placement>(createEmptyPlacement())
+  const placement = ref<Placement>(createDefaultPlacement())
   const isLocked = ref(false)
   const savedSetups = ref<SavedSetup[]>(loadSavedSetups())
 
