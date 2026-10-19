@@ -7,6 +7,7 @@ export const BRACKET_LEVELS = 2
 export const ENEMY_SLOT_COUNT = bracketSize(BRACKET_LEVELS) - 1
 
 const DEFAULT_ENEMY_TYPE_ID = 'grunt'
+export const ALL_GRUNTS_SETUP_NAME = 'ALL_GRUNTS'
 const SETUPS_STORAGE_KEY = 'toornyei:setups'
 
 export type Placement = Array<string | undefined>
@@ -19,6 +20,10 @@ export interface SavedSetup {
 interface StoredSetup {
   name?: unknown
   placement?: unknown
+}
+
+function createPresetSetups(): SavedSetup[] {
+  return [{ name: ALL_GRUNTS_SETUP_NAME, placement: createDefaultPlacement() }]
 }
 
 function isSlotInBracket(slot: number): boolean {
@@ -75,6 +80,7 @@ export const useSetupStore = defineStore('setup', () => {
   const placement = ref<Placement>(createDefaultPlacement())
   const isLocked = ref(false)
   const savedSetups = ref<SavedSetup[]>(loadSavedSetups())
+  const presetSetups = createPresetSetups()
 
   watch(savedSetups, (setups) => persistSavedSetups(setups), { deep: true, flush: 'sync' })
 
@@ -107,7 +113,7 @@ export const useSetupStore = defineStore('setup', () => {
 
   function didSaveSetup(name: string): boolean {
     const trimmed = name.trim()
-    if (trimmed === '') return false
+    if (trimmed === '' || presetSetups.some((preset) => preset.name === trimmed)) return false
 
     const saved: SavedSetup = { name: trimmed, placement: [...placement.value] }
     const existing = savedSetups.value.findIndex((setup) => setup.name === trimmed)
@@ -121,7 +127,7 @@ export const useSetupStore = defineStore('setup', () => {
 
   function didLoadSetup(name: string): boolean {
     if (isLocked.value) return false
-    const setup = savedSetups.value.find((entry) => entry.name === name)
+    const setup = [...presetSetups, ...savedSetups.value].find((entry) => entry.name === name)
     if (!setup) return false
     placement.value = [...setup.placement]
     return true
@@ -132,6 +138,7 @@ export const useSetupStore = defineStore('setup', () => {
     isLocked,
     isComplete,
     savedSetups,
+    presetSetups,
     didPlaceType,
     didClearSlot,
     lockPlacement,

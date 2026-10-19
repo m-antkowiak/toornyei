@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { useSetupStore, BRACKET_LEVELS, ENEMY_SLOT_COUNT } from '../setup'
+import { useSetupStore, ALL_GRUNTS_SETUP_NAME, BRACKET_LEVELS, ENEMY_SLOT_COUNT } from '../setup'
 import { ENEMY_CATALOG, findEnemyType } from '@/domain/catalog'
 
 function fillEverySlot(store: ReturnType<typeof useSetupStore>, typeId = 'grunt') {
@@ -250,6 +250,40 @@ describe('setup store', () => {
       store.lockPlacement()
 
       expect(store.didSaveSetup('mine')).toBe(true)
+    })
+  })
+
+  describe('preset setups', () => {
+    it('offers an all-Grunts setup without anything being saved', () => {
+      const store = useSetupStore()
+
+      expect(store.presetSetups.map((setup) => setup.name)).toEqual([ALL_GRUNTS_SETUP_NAME])
+      expect(store.savedSetups).toEqual([])
+    })
+
+    it('loads the all-Grunts setup into the working placement', () => {
+      const store = useSetupStore()
+      store.didPlaceType(0, 'raider')
+
+      expect(store.didLoadSetup(ALL_GRUNTS_SETUP_NAME)).toBe(true)
+
+      expect(store.placement.every((slot) => slot === 'grunt')).toBe(true)
+    })
+
+    it('rejects loading a preset while locked', () => {
+      const store = useSetupStore()
+      store.didPlaceType(0, 'raider')
+      store.lockPlacement()
+
+      expect(store.didLoadSetup(ALL_GRUNTS_SETUP_NAME)).toBe(false)
+      expect(store.placement[0]).toBe('raider')
+    })
+
+    it('refuses to save over a preset name', () => {
+      const store = useSetupStore()
+
+      expect(store.didSaveSetup(ALL_GRUNTS_SETUP_NAME)).toBe(false)
+      expect(store.savedSetups).toEqual([])
     })
   })
 

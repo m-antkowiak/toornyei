@@ -69,8 +69,11 @@ function hardReset() {
         <input v-model="setupName" type="text" placeholder="Setup name" aria-label="Setup name" />
         <button type="submit" :disabled="setupName.trim() === ''">Save</button>
       </form>
-      <p v-if="setup.savedSetups.length === 0" class="empty">No saved setups yet.</p>
-      <ul v-else class="upgrade-list">
+      <ul class="upgrade-list">
+        <li v-for="preset in setup.presetSetups" :key="preset.name" class="upgrade-row">
+          <span>{{ preset.name }}</span>
+          <button @click="setup.didLoadSetup(preset.name)">Load</button>
+        </li>
         <li v-for="saved in setup.savedSetups" :key="saved.name" class="upgrade-row">
           <span>{{ saved.name }}</span>
           <button @click="setup.didLoadSetup(saved.name)">Load</button>
@@ -240,12 +243,6 @@ function hardReset() {
 .save-row input {
   flex: 1;
   min-width: 0;
-}
-
-.empty {
-  margin: 0;
-  font-size: 0.8rem;
-  opacity: 0.7;
 }
 
 .stat-row {

@@ -45,7 +45,7 @@ A player-purchased, repeatable upgrade paid for with Experience that permanently
 _Avoid_: Stats (as the name of this upgrade), Enemy Upgrade (a different, Gold-funded mechanic — see Enemy Upgrade)
 
 **Setup**:
-The state before a Run is committed, in which the player places Enemy types into the Bracket's Enemy slots, and can save the placement under a name or load a saved one (a load copies into the working placement and never edits the saved slot). Setup mode is derived from the Run being in its setup state, with no manual toggle, and placement is locked as soon as a Run is committed. Saved setups persist across reloads; the working placement does not.
+The state before a Run is committed, in which the player places Enemy types into the Bracket's Enemy slots, and can save the placement under a name or load a saved one or the built-in ALL_GRUNTS preset (never persisted, name reserved) (a load copies into the working placement and never edits the saved slot). Setup mode is derived from the Run being in its setup state, with no manual toggle, and placement is locked as soon as a Run is committed. Saved setups persist across reloads; the working placement does not.
 _Avoid_: Loadout, draft
 
 **Restart**:
