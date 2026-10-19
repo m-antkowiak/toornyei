@@ -3,7 +3,7 @@ import { defineStore, acceptHMRUpdate } from 'pinia'
 import { findEnemyType, createBracketCombatant } from '@/domain/catalog'
 import { bracketSize, type BracketCombatant } from '@/domain/ecosystem'
 
-export const BRACKET_LEVELS = 4
+export const BRACKET_LEVELS = 2
 export const ENEMY_SLOT_COUNT = bracketSize(BRACKET_LEVELS) - 1
 
 const SETUPS_STORAGE_KEY = 'toornyei:setups'

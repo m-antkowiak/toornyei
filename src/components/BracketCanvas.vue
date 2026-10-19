@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { VueFlow, type Edge, type Node } from '@vue-flow/core'
+import { Handle, Position, VueFlow, type Edge, type Node } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import { useRunStore } from '@/stores/run'
 import { useSetupStore, BRACKET_LEVELS } from '@/stores/setup'
 import { findEnemyType } from '@/domain/catalog'
 import { CHAMPION_SLOT, bracketRoundSizes, type BracketMatch } from '@/domain/ecosystem'
+import { bracketNodePositions } from '@/domain/bracketLayout'
 
 type NodeStatus =
   | 'champion'
@@ -78,17 +79,18 @@ function nodeId(round: number, position: number): string {
   return `${round}:${position}`
 }
 
+const positions = bracketNodePositions(roundSizes, COLUMN_GAP, ROW_HEIGHT)
+
 const nodes = computed<Node<BracketNodeData>[]>(() => {
   const built: Node<BracketNodeData>[] = []
   for (const [round, size] of roundSizes.entries()) {
-    const columnHeight = size * ROW_HEIGHT
     for (let position = 0; position < size; position++) {
       const slot = slotAt(round, position)
       const status = statusFor(round, position, slot)
       built.push({
         id: nodeId(round, position),
         type: 'bracket',
-        position: { x: round * COLUMN_GAP, y: (position + 0.5) * (columnHeight / size) },
+        position: positions[round]![position]!,
         data: {
           label: nameForSlot(slot),
           icon: iconForSlot(slot),
@@ -110,6 +112,7 @@ const edges = computed<Edge[]>(() => {
         id: `${nodeId(round, position)}->${nodeId(round + 1, Math.floor(position / 2))}`,
         source: nodeId(round, position),
         target: nodeId(round + 1, Math.floor(position / 2)),
+        type: 'smoothstep',
       })
     }
   }
@@ -122,6 +125,8 @@ const edges = computed<Edge[]>(() => {
     <VueFlow :nodes="nodes" :edges="edges" :nodes-draggable="false" :zoom-on-double-click="false" fit-view-on-init>
       <template #node-bracket="{ data }">
         <div class="bracket-node" :class="`status-${data.status}`">
+          <Handle type="target" :position="Position.Left" />
+          <Handle type="source" :position="Position.Right" />
           <span class="icon">{{ data.icon }}</span>
           <span class="label">{{ data.label }}</span>
           <span v-if="data.status === 'live'" class="live-dot" aria-label="live duel" />
@@ -153,6 +158,12 @@ const edges = computed<Edge[]>(() => {
   font-size: 0.75rem;
   white-space: nowrap;
   position: relative;
+  width: 9rem;
+}
+
+.bracket-node :deep(.vue-flow__handle) {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .bracket-node .icon {

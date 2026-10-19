@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useRunStore } from '../run'
 import { useProgressionStore } from '../progression'
-import { useSetupStore, ENEMY_SLOT_COUNT } from '../setup'
+import { useSetupStore, BRACKET_LEVELS, ENEMY_SLOT_COUNT } from '../setup'
 import { ENEMY_CATALOG, findEnemyType } from '@/domain/catalog'
 import { experienceReward } from '@/domain/experience'
 import { goldReward } from '@/domain/gold'
@@ -85,13 +85,13 @@ describe('run store', () => {
       expect(setup.isLocked).toBe(false)
     })
 
-    it('builds a sixteen-slot bracket with the Champion in the first slot, and locks the placement', () => {
+    it('builds a bracket with one slot per Enemy plus the Champion with the Champion in the first slot, and locks the placement', () => {
       const { run, setup } = setupRun()
 
       run.commitToFight()
 
       expect(run.runStatus).toBe('active')
-      expect(run.bracket!.combatants).toHaveLength(16)
+      expect(run.bracket!.combatants).toHaveLength(ENEMY_SLOT_COUNT + 1)
       expect(run.bracket!.combatants[0]).toBe(run.champion)
       expect(setup.isLocked).toBe(true)
       expect(setup.didPlaceType(0, 'brute')).toBe(false)
@@ -100,12 +100,12 @@ describe('run store', () => {
     it('puts the placed Enemy types into the slots after the Champion, in order', () => {
       const { run, setup } = setupRun()
       setup.didPlaceType(0, 'scout')
-      setup.didPlaceType(14, 'raider')
+      setup.didPlaceType(ENEMY_SLOT_COUNT - 1, 'raider')
 
       run.commitToFight()
 
       expect(run.bracket!.combatants[1]!.baseStats).toEqual(findEnemyType('scout')!.baseStats)
-      expect(run.bracket!.combatants[15]!.baseStats).toEqual(findEnemyType('raider')!.baseStats)
+      expect(run.bracket!.combatants[ENEMY_SLOT_COUNT]!.baseStats).toEqual(findEnemyType('raider')!.baseStats)
     })
 
     it('starts the first fight against the Enemy next to the Champion', () => {
@@ -312,7 +312,7 @@ describe('run store', () => {
       run.commitToFight()
       vi.advanceTimersByTime(1000 + FIGHT_COOLDOWN_MS + 1000)
 
-      expect(run.roundIndex).toBe(2)
+      expect(run.roundIndex).toBe(BRACKET_LEVELS - 1)
       expect(run.champion.traits).toEqual(
         expect.arrayContaining([
           { stat: 'damage', amount: 4 },
@@ -354,7 +354,7 @@ describe('run store', () => {
 
       expect(stores.run.outcome).toBe('champion')
       expect(stores.run.runStatus).toBe('victorious')
-      expect(stores.run.roundIndex).toBe(3)
+      expect(stores.run.roundIndex).toBe(BRACKET_LEVELS - 1)
       expect(stores.run.isRunning).toBe(false)
     })
   })
@@ -784,7 +784,7 @@ describe('run store', () => {
 
     it('raises every enemys damage and hp in the next bracket', () => {
       const stores = setupRun()
-      stores.setup.didPlaceType(14, 'raider')
+      stores.setup.didPlaceType(ENEMY_SLOT_COUNT - 1, 'raider')
       winWholeBracket(stores)
       stores.run.prestige()
 
@@ -792,8 +792,8 @@ describe('run store', () => {
 
       expect(stores.run.bracket!.combatants[1]!.baseStats.damage).toBeCloseTo(9.2)
       expect(stores.run.bracket!.combatants[1]!.baseStats.hp).toBeCloseTo(115)
-      expect(stores.run.bracket!.combatants[15]!.baseStats.damage).toBeCloseTo(23)
-      expect(stores.run.bracket!.combatants[15]!.baseStats.hp).toBeCloseTo(276)
+      expect(stores.run.bracket!.combatants[ENEMY_SLOT_COUNT]!.baseStats.damage).toBeCloseTo(23)
+      expect(stores.run.bracket!.combatants[ENEMY_SLOT_COUNT]!.baseStats.hp).toBeCloseTo(276)
     })
 
     it('stacks the Ladder Level multiplier on top of a purchased Enemy Upgrade', () => {

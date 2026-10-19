@@ -169,8 +169,8 @@ function hardReset() {
 
 <style scoped>
 .hud {
-  width: 16rem;
-  flex-shrink: 0;
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 1rem;

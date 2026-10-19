@@ -17,9 +17,8 @@ describe('setup store', () => {
   it('starts with an empty slot for every Enemy but the Champion, and nothing locked', () => {
     const store = useSetupStore()
 
-    expect(BRACKET_LEVELS).toBe(4)
-    expect(ENEMY_SLOT_COUNT).toBe(15)
-    expect(store.placement).toHaveLength(15)
+    expect(ENEMY_SLOT_COUNT).toBe(2 ** BRACKET_LEVELS - 1)
+    expect(store.placement).toHaveLength(ENEMY_SLOT_COUNT)
     expect(store.placement.every((slot) => slot === undefined)).toBe(true)
     expect(store.isLocked).toBe(false)
     expect(store.isComplete).toBe(false)
@@ -29,9 +28,9 @@ describe('setup store', () => {
     it('places an Enemy type into a slot', () => {
       const store = useSetupStore()
 
-      expect(store.didPlaceType(3, 'scout')).toBe(true)
+      expect(store.didPlaceType(ENEMY_SLOT_COUNT - 1, 'scout')).toBe(true)
 
-      expect(store.placement[3]).toBe('scout')
+      expect(store.placement[ENEMY_SLOT_COUNT - 1]).toBe('scout')
     })
 
     it('replaces the type already in a slot', () => {
@@ -63,9 +62,9 @@ describe('setup store', () => {
       const store = useSetupStore()
 
       expect(store.didPlaceType(-1, 'grunt')).toBe(false)
-      expect(store.didPlaceType(15, 'grunt')).toBe(false)
+      expect(store.didPlaceType(ENEMY_SLOT_COUNT, 'grunt')).toBe(false)
       expect(store.didPlaceType(1.5, 'grunt')).toBe(false)
-      expect(store.placement).toHaveLength(15)
+      expect(store.placement).toHaveLength(ENEMY_SLOT_COUNT)
     })
 
     it('clears a slot', () => {
@@ -129,7 +128,7 @@ describe('setup store', () => {
 
       const combatants = store.buildCombatants()!
 
-      expect(combatants).toHaveLength(15)
+      expect(combatants).toHaveLength(ENEMY_SLOT_COUNT)
       expect(combatants[1]!.baseStats).toEqual(findEnemyType('scout')!.baseStats)
       expect(combatants[2]!.traits).toEqual([findEnemyType('brute')!.trait])
     })
@@ -297,13 +296,13 @@ describe('setup store', () => {
 
     it('treats a stored type id that no longer exists as an empty slot', () => {
       const placement = Array.from({ length: ENEMY_SLOT_COUNT }, () => 'grunt')
-      placement[4] = 'retired-type'
+      placement[1] = 'retired-type'
       localStorage.setItem('toornyei:setups', JSON.stringify([{ name: 'old', placement }]))
 
       const store = useSetupStore()
 
-      expect(store.savedSetups[0]!.placement[4]).toBeUndefined()
-      expect(store.savedSetups[0]!.placement[3]).toBe('grunt')
+      expect(store.savedSetups[0]!.placement[1]).toBeUndefined()
+      expect(store.savedSetups[0]!.placement[ENEMY_SLOT_COUNT - 1]).toBe('grunt')
     })
   })
 })
