@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { Handle, Position, VueFlow, type Edge, type Node } from '@vue-flow/core'
+import { computed, nextTick, ref, watch } from 'vue'
+import { Handle, Position, VueFlow, useVueFlow, type Edge, type Node } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import { useRunStore } from '@/stores/run'
 import { useSetupStore, BRACKET_LEVELS } from '@/stores/setup'
 import { findEnemyType } from '@/domain/catalog'
 import { CHAMPION_SLOT, bracketRoundSizes, type BracketMatch } from '@/domain/ecosystem'
 import { bracketNodePositions } from '@/domain/bracketLayout'
+import { initialFraming, nextFraming, type CanvasFramingEvent } from '@/domain/canvasFraming'
 
 type NodeStatus =
   | 'champion'
@@ -118,11 +119,48 @@ const edges = computed<Edge[]>(() => {
   }
   return built
 })
+
+const FIT_PADDING = 0.2
+const FIT_DURATION = 300
+
+const { fitView, onMoveStart } = useVueFlow()
+const framing = ref(initialFraming)
+const hasActiveRun = computed(() => run.runStatus === 'active')
+
+function applyFrame() {
+  const { frame } = framing.value
+  const options = { padding: FIT_PADDING, duration: FIT_DURATION }
+  if (frame.kind === 'all') {
+    void nextTick(() => fitView(options))
+    return
+  }
+  const nodes = Array.from({ length: roundSizes[frame.round] ?? 0 }, (_, position) => nodeId(frame.round, position))
+  void nextTick(() => fitView({ ...options, nodes }))
+}
+
+function dispatch(event: CanvasFramingEvent) {
+  const previous = framing.value
+  framing.value = nextFraming(previous, event)
+  if (framing.value.frame !== previous.frame || event.type === 'recentered' || event.type === 'fitAll') applyFrame()
+}
+
+watch(
+  () => [run.runStatus, run.roundIndex] as const,
+  ([status, round]) => {
+    if (status === 'setup') dispatch({ type: 'enteredSetup' })
+    else if (status === 'active') dispatch({ type: 'roundStarted', round })
+  },
+  { immediate: true },
+)
+
+onMoveStart(({ event }) => {
+  if (event?.sourceEvent) dispatch({ type: 'userMoved' })
+})
 </script>
 
 <template>
   <div class="canvas">
-    <VueFlow :nodes="nodes" :edges="edges" :nodes-draggable="false" :zoom-on-double-click="false" fit-view-on-init>
+    <VueFlow :nodes="nodes" :edges="edges" :nodes-draggable="false" :zoom-on-double-click="false">
       <template #node-bracket="{ data }">
         <div class="bracket-node" :class="`status-${data.status}`">
           <Handle type="target" :position="Position.Left" />
@@ -133,11 +171,16 @@ const edges = computed<Edge[]>(() => {
         </div>
       </template>
     </VueFlow>
+    <div class="canvas-controls">
+      <button v-if="hasActiveRun" @click="dispatch({ type: 'recentered', round: run.roundIndex })">Recenter</button>
+      <button @click="dispatch({ type: 'fitAll' })">Fit all</button>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .canvas {
+  position: relative;
   flex: 1;
   min-width: 0;
   height: 100%;
@@ -145,6 +188,15 @@ const edges = computed<Edge[]>(() => {
   border: 1px solid var(--color-border);
   border-radius: 8px;
   overflow: hidden;
+}
+
+.canvas-controls {
+  position: absolute;
+  right: 0.6rem;
+  bottom: 0.6rem;
+  z-index: 5;
+  display: flex;
+  gap: 0.4rem;
 }
 
 .bracket-node {
