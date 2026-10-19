@@ -123,11 +123,13 @@ const edges = computed<Edge[]>(() => {
 const FIT_PADDING = 0.2
 const FIT_DURATION = 300
 
-const { fitView, onMoveStart } = useVueFlow()
+const { fitView, onMoveStart, onNodesInitialized } = useVueFlow()
+const nodesMeasured = ref(false)
 const framing = ref(initialFraming)
 const hasActiveRun = computed(() => run.runStatus === 'active')
 
 function applyFrame() {
+  if (!nodesMeasured.value) return
   const { frame } = framing.value
   const options = { padding: FIT_PADDING, duration: FIT_DURATION }
   if (frame.kind === 'all') {
@@ -152,6 +154,12 @@ watch(
   },
   { immediate: true },
 )
+
+onNodesInitialized(() => {
+  if (nodesMeasured.value) return
+  nodesMeasured.value = true
+  applyFrame()
+})
 
 onMoveStart(({ event }) => {
   if (event?.sourceEvent) dispatch({ type: 'userMoved' })
