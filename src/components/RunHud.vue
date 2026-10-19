@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useRunStore } from '@/stores/run'
 import { useSetupStore } from '@/stores/setup'
 import { useProgressionStore } from '@/stores/progression'
@@ -14,6 +15,12 @@ const championUpgradeLabels: Record<ChampionUpgradeKind, string> = {
   damage: 'Damage',
   attackSpeed: 'Attack Speed',
   hp: 'HP',
+}
+
+const setupName = ref('')
+
+function saveSetup() {
+  if (setup.didSaveSetup(setupName.value)) setupName.value = ''
 }
 
 function hardReset() {
@@ -54,6 +61,21 @@ function hardReset() {
         <button @click="run.edit()">Edit</button>
         <button v-if="run.runStatus === 'victorious'" @click="run.prestige()">Prestige</button>
       </div>
+    </section>
+
+    <section v-if="run.runStatus === 'setup'" class="panel">
+      <h2>Saved Setups</h2>
+      <form class="save-row" @submit.prevent="saveSetup()">
+        <input v-model="setupName" type="text" placeholder="Setup name" aria-label="Setup name" />
+        <button type="submit" :disabled="setupName.trim() === ''">Save</button>
+      </form>
+      <p v-if="setup.savedSetups.length === 0" class="empty">No saved setups yet.</p>
+      <ul v-else class="upgrade-list">
+        <li v-for="saved in setup.savedSetups" :key="saved.name" class="upgrade-row">
+          <span>{{ saved.name }}</span>
+          <button @click="setup.didLoadSetup(saved.name)">Load</button>
+        </li>
+      </ul>
     </section>
 
     <section class="panel">
@@ -207,6 +229,23 @@ function hardReset() {
   display: flex;
   gap: 0.5rem;
   margin-top: 0.5rem;
+}
+
+.save-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.save-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.empty {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.7;
 }
 
 .stat-row {
