@@ -4,7 +4,8 @@ import { Handle, Position, VueFlow, useVueFlow, type Edge, type Node } from '@vu
 import '@vue-flow/core/dist/style.css'
 import { useRunStore } from '@/stores/run'
 import { useSetupStore, BRACKET_LEVELS } from '@/stores/setup'
-import { findEnemyType } from '@/domain/catalog'
+import { ENEMY_CATALOG, findEnemyType } from '@/domain/catalog'
+import { formatNumber } from '@/domain/format'
 import { CHAMPION_SLOT, bracketRoundSizes, type BracketMatch } from '@/domain/ecosystem'
 import { bracketNodePositions } from '@/domain/bracketLayout'
 import { initialFraming, nextFraming, type CanvasFramingEvent } from '@/domain/canvasFraming'
@@ -22,6 +23,9 @@ interface BracketNodeData {
   label: string
   icon: string
   status: NodeStatus
+  enemySlot: number | undefined
+  currentTypeId: string | undefined
+  isPickerOpen: boolean
 }
 
 const run = useRunStore()
@@ -80,6 +84,25 @@ function nodeId(round: number, position: number): string {
   return `${round}:${position}`
 }
 
+const openEnemySlot = ref<number>()
+const isPlacementOpen = computed(() => run.runStatus === 'setup' && !setup.isLocked)
+
+function enemySlotAt(round: number, position: number): number | undefined {
+  return round === 0 && position !== CHAMPION_SLOT ? position - 1 : undefined
+}
+
+function choose(enemySlot: number, typeId: string) {
+  if (setup.didPlaceType(enemySlot, typeId)) openEnemySlot.value = undefined
+}
+
+function clear(enemySlot: number) {
+  if (setup.didClearSlot(enemySlot)) openEnemySlot.value = undefined
+}
+
+watch(isPlacementOpen, (open) => {
+  if (!open) openEnemySlot.value = undefined
+})
+
 const positions = bracketNodePositions(roundSizes, COLUMN_GAP, ROW_HEIGHT)
 
 const nodes = computed<Node<BracketNodeData>[]>(() => {
@@ -88,6 +111,8 @@ const nodes = computed<Node<BracketNodeData>[]>(() => {
     for (let position = 0; position < size; position++) {
       const slot = slotAt(round, position)
       const status = statusFor(round, position, slot)
+      const enemySlot = enemySlotAt(round, position)
+      const isPickerOpen = enemySlot !== undefined && enemySlot === openEnemySlot.value && isPlacementOpen.value
       built.push({
         id: nodeId(round, position),
         type: 'bracket',
@@ -96,7 +121,11 @@ const nodes = computed<Node<BracketNodeData>[]>(() => {
           label: nameForSlot(slot),
           icon: iconForSlot(slot),
           status,
+          enemySlot,
+          currentTypeId: enemySlot === undefined ? undefined : setup.placement[enemySlot],
+          isPickerOpen,
         },
+        zIndex: isPickerOpen ? 1000 : 0,
         draggable: false,
         connectable: false,
       })
@@ -123,7 +152,7 @@ const edges = computed<Edge[]>(() => {
 const FIT_PADDING = 0.2
 const FIT_DURATION = 300
 
-const { fitView, onMoveStart, onNodesInitialized } = useVueFlow()
+const { fitView, onMoveStart, onNodesInitialized, onNodeClick, onPaneClick } = useVueFlow()
 const nodesMeasured = ref(false)
 const framing = ref(initialFraming)
 const hasActiveRun = computed(() => run.runStatus === 'active')
@@ -161,6 +190,16 @@ onNodesInitialized(() => {
   applyFrame()
 })
 
+onNodeClick(({ node }) => {
+  const enemySlot = (node.data as BracketNodeData).enemySlot
+  if (enemySlot === undefined || !isPlacementOpen.value) return
+  openEnemySlot.value = openEnemySlot.value === enemySlot ? undefined : enemySlot
+})
+
+onPaneClick(() => {
+  openEnemySlot.value = undefined
+})
+
 onMoveStart(({ event }) => {
   if (event?.sourceEvent) dispatch({ type: 'userMoved' })
 })
@@ -176,6 +215,29 @@ onMoveStart(({ event }) => {
           <span class="icon">{{ data.icon }}</span>
           <span class="label">{{ data.label }}</span>
           <span v-if="data.status === 'live'" class="live-dot" aria-label="live duel" />
+          <div v-if="data.isPickerOpen" class="picker nopan nodrag nowheel" @click.stop>
+            <button
+              v-for="type in ENEMY_CATALOG"
+              :key="type.id"
+              class="card"
+              :class="{ current: type.id === data.currentTypeId }"
+              @click="choose(data.enemySlot!, type.id)"
+            >
+              <span class="icon">{{ type.name.charAt(0).toUpperCase() }}</span>
+              <span class="card-body">
+                <strong>{{ type.name }}</strong>
+                <span>
+                  HP {{ formatNumber(type.baseStats.hp) }} · DMG {{ formatNumber(type.baseStats.damage) }} · SPD
+                  {{ formatNumber(type.baseStats.attackSpeed, 2) }}
+                </span>
+                <span>
+                  XP {{ formatNumber(type.experienceValue) }} · Gold {{ formatNumber(type.goldValue) }} ·
+                  {{ type.trait.stat }} +{{ formatNumber(type.trait.amount, 2) }}
+                </span>
+              </span>
+            </button>
+            <button v-if="data.currentTypeId" class="clear" @click="clear(data.enemySlot!)">Clear</button>
+          </div>
         </div>
       </template>
     </VueFlow>
@@ -236,6 +298,43 @@ onMoveStart(({ event }) => {
   background: var(--color-background-mute);
   font-weight: bold;
   flex-shrink: 0;
+}
+
+.picker {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 0.75rem);
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  width: 17rem;
+  padding: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-background);
+  white-space: normal;
+  cursor: default;
+}
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  text-align: left;
+  font-size: 0.7rem;
+}
+
+.card.current {
+  border-color: hsla(160, 100%, 37%, 1);
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
 }
 
 .status-champion {

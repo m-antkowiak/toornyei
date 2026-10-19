@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { useRunStore } from '@/stores/run'
+import { useSetupStore } from '@/stores/setup'
 import { useProgressionStore } from '@/stores/progression'
 import { formatNumber } from '@/domain/format'
 import { CHAMPION_UPGRADE_KINDS, type ChampionUpgradeKind } from '@/domain/championUpgrade'
 
 const run = useRunStore()
+const setup = useSetupStore()
 const progression = useProgressionStore()
 const isDevelopment = import.meta.env.DEV
 
@@ -44,7 +46,10 @@ function hardReset() {
         </div>
       </div>
 
-      <div v-if="run.runStatus !== 'setup' && run.runStatus !== 'active'" class="post-run-controls">
+      <div v-if="run.runStatus === 'setup'" class="post-run-controls">
+        <button :disabled="!setup.isComplete" @click="run.commitToFight()">Commit to Fight</button>
+      </div>
+      <div v-else-if="run.runStatus !== 'active'" class="post-run-controls">
         <button @click="run.restart()">Restart</button>
         <button @click="run.edit()">Edit</button>
         <button v-if="run.runStatus === 'victorious'" @click="run.prestige()">Prestige</button>
