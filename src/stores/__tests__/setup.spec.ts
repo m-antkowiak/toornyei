@@ -253,6 +253,49 @@ describe('setup store', () => {
     })
   })
 
+  describe('removing saved setups', () => {
+    it('removes a saved setup by name and leaves the others', () => {
+      const store = useSetupStore()
+      store.didSaveSetup('a')
+      store.didSaveSetup('b')
+
+      expect(store.didRemoveSetup('a')).toBe(true)
+
+      expect(store.savedSetups.map((setup) => setup.name)).toEqual(['b'])
+    })
+
+    it('rejects an unknown name and a preset name', () => {
+      const store = useSetupStore()
+      store.didSaveSetup('a')
+
+      expect(store.didRemoveSetup('missing')).toBe(false)
+      expect(store.didRemoveSetup(ALL_GRUNTS_SETUP_NAME)).toBe(false)
+      expect(store.savedSetups).toHaveLength(1)
+      expect(store.presetSetups).toHaveLength(1)
+    })
+
+    it('keeps the removal across a reload', () => {
+      const first = useSetupStore()
+      first.didSaveSetup('a')
+      first.didRemoveSetup('a')
+
+      setActivePinia(createPinia())
+
+      expect(useSetupStore().savedSetups).toEqual([])
+    })
+
+    it('removes every saved setup but keeps the presets', () => {
+      const store = useSetupStore()
+      store.didSaveSetup('a')
+      store.didSaveSetup('b')
+
+      store.removeAllSavedSetups()
+
+      expect(store.savedSetups).toEqual([])
+      expect(store.presetSetups.map((setup) => setup.name)).toEqual([ALL_GRUNTS_SETUP_NAME])
+    })
+  })
+
   describe('preset setups', () => {
     it('offers an all-Grunts setup without anything being saved', () => {
       const store = useSetupStore()

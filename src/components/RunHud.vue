@@ -25,6 +25,7 @@ function saveSetup() {
 
 function hardReset() {
   progression.hardReset()
+  setup.removeAllSavedSetups()
   globalThis.location.reload()
 }
 </script>
@@ -76,7 +77,10 @@ function hardReset() {
         </li>
         <li v-for="saved in setup.savedSetups" :key="saved.name" class="upgrade-row">
           <span>{{ saved.name }}</span>
-          <button @click="setup.didLoadSetup(saved.name)">Load</button>
+          <span class="row-actions">
+            <button @click="setup.didLoadSetup(saved.name)">Load</button>
+            <button @click="setup.didRemoveSetup(saved.name)">Remove</button>
+          </span>
         </li>
       </ul>
     </section>
@@ -232,6 +236,11 @@ function hardReset() {
   display: flex;
   gap: 0.5rem;
   margin-top: 0.5rem;
+}
+
+.row-actions {
+  display: flex;
+  gap: 0.4rem;
 }
 
 .save-row {

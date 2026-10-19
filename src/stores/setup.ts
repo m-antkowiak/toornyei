@@ -125,6 +125,17 @@ export const useSetupStore = defineStore('setup', () => {
     return true
   }
 
+  function didRemoveSetup(name: string): boolean {
+    const index = savedSetups.value.findIndex((setup) => setup.name === name)
+    if (index === -1) return false
+    savedSetups.value.splice(index, 1)
+    return true
+  }
+
+  function removeAllSavedSetups() {
+    savedSetups.value = []
+  }
+
   function didLoadSetup(name: string): boolean {
     if (isLocked.value) return false
     const setup = [...presetSetups, ...savedSetups.value].find((entry) => entry.name === name)
@@ -146,6 +157,8 @@ export const useSetupStore = defineStore('setup', () => {
     buildCombatants,
     didSaveSetup,
     didLoadSetup,
+    didRemoveSetup,
+    removeAllSavedSetups,
   }
 })
 
