@@ -12,7 +12,7 @@ Classic clickers are mostly about waiting. Toornyei keeps the idle core but puts
 - **You control the risk.** Beat an Enemy once, and you can spend Gold to upgrade it — better stats, better rewards — entirely at your own pace.
 - **Reset to go again, stronger.** A classic prestige loop: cash in a finished run for permanent upgrades that make the next one faster.
 
-This is early-stage design — see [`CONTEXT.md`](./CONTEXT.md) for the full glossary and what's still undecided (multiple Champions, parallel ladders, and more).
+This is early-stage design — see [`GLOSSARY.md`](./GLOSSARY.md) for the full glossary and what's still undecided (multiple Champions, parallel ladders, and more).
 
 ## Tech stack
 

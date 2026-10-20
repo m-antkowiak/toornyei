@@ -42,3 +42,7 @@ Issues live as GitHub Issues in `m-antkowiak/toornyei`, using the `gh` CLI. See 
 ### Triage labels
 
 Default five-label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), plus `needs-grilling`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
