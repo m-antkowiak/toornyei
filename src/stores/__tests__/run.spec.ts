@@ -105,7 +105,9 @@ describe('run store', () => {
       run.commitToFight()
 
       expect(run.bracket!.combatants[1]!.baseStats).toEqual(findEnemyType('scout')!.baseStats)
-      expect(run.bracket!.combatants[ENEMY_SLOT_COUNT]!.baseStats).toEqual(findEnemyType('raider')!.baseStats)
+      expect(run.bracket!.combatants[ENEMY_SLOT_COUNT]!.baseStats).toEqual(
+        findEnemyType('raider')!.baseStats,
+      )
     })
 
     it('starts the first fight against the Enemy next to the Champion', () => {
@@ -414,16 +416,16 @@ describe('run store', () => {
 
       run.commitToFight()
 
-      expect(
-        run.liveEnemyMatches.some((match) => match.round === 0 && match.index === 1),
-      ).toBe(true)
+      expect(run.liveEnemyMatches.some((match) => match.round === 0 && match.index === 1)).toBe(
+        true,
+      )
       expect(run.liveEnemyMatches.every((match) => match.first !== CHAMPION_SLOT)).toBe(true)
 
       vi.advanceTimersByTime(1000)
 
-      expect(
-        run.liveEnemyMatches.some((match) => match.round === 0 && match.index === 1),
-      ).toBe(false)
+      expect(run.liveEnemyMatches.some((match) => match.round === 0 && match.index === 1)).toBe(
+        false,
+      )
     })
 
     it('stops duelling once the run has concluded', () => {

@@ -90,9 +90,14 @@ function hardReset() {
       <div class="stat-row">
         <span>HP</span>
         <div class="bar">
-          <div class="fill" :style="{ width: (run.championHp / run.championStats.hp) * 100 + '%' }" />
+          <div
+            class="fill"
+            :style="{ width: (run.championHp / run.championStats.hp) * 100 + '%' }"
+          />
         </div>
-        <span class="value">{{ formatNumber(run.championHp) }}/{{ formatNumber(run.championStats.hp) }}</span>
+        <span class="value"
+          >{{ formatNumber(run.championHp) }}/{{ formatNumber(run.championStats.hp) }}</span
+        >
       </div>
       <div class="stat-row">
         <span>Damage</span>
@@ -115,14 +120,22 @@ function hardReset() {
       </div>
     </section>
 
-    <section v-if="run.currentEnemy && run.currentEnemyStats && run.currentEnemyRewards" class="panel enemy">
+    <section
+      v-if="run.currentEnemy && run.currentEnemyStats && run.currentEnemyRewards"
+      class="panel enemy"
+    >
       <h2>Enemy</h2>
       <div class="stat-row">
         <span>HP</span>
         <div class="bar">
-          <div class="fill" :style="{ width: (run.enemyHp / run.currentEnemyStats.hp) * 100 + '%' }" />
+          <div
+            class="fill"
+            :style="{ width: (run.enemyHp / run.currentEnemyStats.hp) * 100 + '%' }"
+          />
         </div>
-        <span class="value">{{ formatNumber(run.enemyHp) }}/{{ formatNumber(run.currentEnemyStats.hp) }}</span>
+        <span class="value"
+          >{{ formatNumber(run.enemyHp) }}/{{ formatNumber(run.currentEnemyStats.hp) }}</span
+        >
       </div>
       <div class="stat-row">
         <span>Damage</span>
@@ -173,7 +186,9 @@ function hardReset() {
       <h2>Champion Upgrades</h2>
       <ul class="upgrade-list">
         <li v-for="kind in CHAMPION_UPGRADE_KINDS" :key="kind" class="upgrade-row">
-          <span>{{ championUpgradeLabels[kind] }} (Lv {{ progression.championUpgrades[kind] }})</span>
+          <span
+            >{{ championUpgradeLabels[kind] }} (Lv {{ progression.championUpgrades[kind] }})</span
+          >
           <button
             :disabled="progression.experience < progression.championUpgradeCostOf(kind)"
             @click="progression.didPurchaseChampionUpgrade(kind)"
@@ -190,7 +205,11 @@ function hardReset() {
         <li v-for="unlock in progression.metaUnlocks" :key="unlock.id" class="upgrade-row">
           <span>{{ unlock.id }}</span>
           <span v-if="unlock.unlocked">Unlocked</span>
-          <button v-else :disabled="progression.prestigeTokens < 1" @click="progression.didPurchaseMetaUnlock(unlock.id)">
+          <button
+            v-else
+            :disabled="progression.prestigeTokens < 1"
+            @click="progression.didPurchaseMetaUnlock(unlock.id)"
+          >
             Unlock (1 token)
           </button>
         </li>

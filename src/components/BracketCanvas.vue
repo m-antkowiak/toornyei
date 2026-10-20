@@ -57,7 +57,9 @@ function iconForSlot(slot: number | undefined): string {
 }
 
 function isInMatch(matches: BracketMatch[], round: number, slot: number): boolean {
-  return matches.some((match) => match.round === round && (match.first === slot || match.second === slot))
+  return matches.some(
+    (match) => match.round === round && (match.first === slot || match.second === slot),
+  )
 }
 
 function didAdvance(round: number, position: number, slot: number): boolean | undefined {
@@ -71,7 +73,8 @@ function didAdvance(round: number, position: number, slot: number): boolean | un
 function statusFor(round: number, position: number, slot: number | undefined): NodeStatus {
   if (slot === undefined) return round === 0 ? 'empty' : 'pending'
   if (slot === CHAMPION_SLOT) return 'champion'
-  if (run.currentEnemy && run.bracket?.combatants[slot] === run.currentEnemy) return 'current-opponent'
+  if (run.currentEnemy && run.bracket?.combatants[slot] === run.currentEnemy)
+    return 'current-opponent'
   if (isInMatch(run.liveEnemyMatches, round, slot)) return 'live'
 
   const advanced = didAdvance(round, position, slot)
@@ -112,7 +115,8 @@ const nodes = computed<Node<BracketNodeData>[]>(() => {
       const slot = slotAt(round, position)
       const status = statusFor(round, position, slot)
       const enemySlot = enemySlotAt(round, position)
-      const isPickerOpen = enemySlot !== undefined && enemySlot === openEnemySlot.value && isPlacementOpen.value
+      const isPickerOpen =
+        enemySlot !== undefined && enemySlot === openEnemySlot.value && isPlacementOpen.value
       built.push({
         id: nodeId(round, position),
         type: 'bracket',
@@ -165,14 +169,21 @@ function applyFrame() {
     void nextTick(() => fitView(options))
     return
   }
-  const nodes = Array.from({ length: roundSizes[frame.round] ?? 0 }, (_, position) => nodeId(frame.round, position))
+  const nodes = Array.from({ length: roundSizes[frame.round] ?? 0 }, (_, position) =>
+    nodeId(frame.round, position),
+  )
   void nextTick(() => fitView({ ...options, nodes }))
 }
 
 function dispatch(event: CanvasFramingEvent) {
   const previous = framing.value
   framing.value = nextFraming(previous, event)
-  if (framing.value.frame !== previous.frame || event.type === 'recentered' || event.type === 'fitAll') applyFrame()
+  if (
+    framing.value.frame !== previous.frame ||
+    event.type === 'recentered' ||
+    event.type === 'fitAll'
+  )
+    applyFrame()
 }
 
 watch(
@@ -227,22 +238,29 @@ onMoveStart(({ event }) => {
               <span class="card-body">
                 <strong>{{ type.name }}</strong>
                 <span>
-                  HP {{ formatNumber(type.baseStats.hp) }} · DMG {{ formatNumber(type.baseStats.damage) }} · SPD
+                  HP {{ formatNumber(type.baseStats.hp) }} · DMG
+                  {{ formatNumber(type.baseStats.damage) }} · SPD
                   {{ formatNumber(type.baseStats.attackSpeed, 2) }}
                 </span>
                 <span>
-                  XP {{ formatNumber(type.experienceValue) }} · Gold {{ formatNumber(type.goldValue) }} ·
-                  {{ type.trait.stat }} +{{ formatNumber(type.trait.amount, 2) }}
+                  XP {{ formatNumber(type.experienceValue) }} · Gold
+                  {{ formatNumber(type.goldValue) }} · {{ type.trait.stat }} +{{
+                    formatNumber(type.trait.amount, 2)
+                  }}
                 </span>
               </span>
             </button>
-            <button v-if="data.currentTypeId" class="clear" @click="clear(data.enemySlot!)">Clear</button>
+            <button v-if="data.currentTypeId" class="clear" @click="clear(data.enemySlot!)">
+              Clear
+            </button>
           </div>
         </div>
       </template>
     </VueFlow>
     <div class="canvas-controls">
-      <button v-if="hasActiveRun" @click="dispatch({ type: 'recentered', round: run.roundIndex })">Recenter</button>
+      <button v-if="hasActiveRun" @click="dispatch({ type: 'recentered', round: run.roundIndex })">
+        Recenter
+      </button>
       <button @click="dispatch({ type: 'fitAll' })">Fit all</button>
     </div>
   </div>

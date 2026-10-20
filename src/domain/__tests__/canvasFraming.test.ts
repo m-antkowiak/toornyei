@@ -23,7 +23,9 @@ describe('nextFraming', () => {
   })
 
   it('keeps the view across later round transitions while overridden', () => {
-    const moved = nextFraming(nextFraming(initialFraming, { type: 'roundStarted', round: 1 }), { type: 'userMoved' })
+    const moved = nextFraming(nextFraming(initialFraming, { type: 'roundStarted', round: 1 }), {
+      type: 'userMoved',
+    })
 
     const framing = nextFraming(moved, { type: 'roundStarted', round: 2 })
 
@@ -47,7 +49,9 @@ describe('nextFraming', () => {
   })
 
   it('still auto-frames the next round after fit all when there was no override', () => {
-    const fitted = nextFraming(nextFraming(initialFraming, { type: 'roundStarted', round: 1 }), { type: 'fitAll' })
+    const fitted = nextFraming(nextFraming(initialFraming, { type: 'roundStarted', round: 1 }), {
+      type: 'fitAll',
+    })
 
     const framing = nextFraming(fitted, { type: 'roundStarted', round: 2 })
 

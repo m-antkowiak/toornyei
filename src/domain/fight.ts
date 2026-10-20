@@ -42,7 +42,11 @@ export function advanceFight(fight: FightState, elapsedMs: number): FightState {
   const { champion, enemy } = fight
 
   while (remainingMs > 0 && fight.outcome === undefined) {
-    const stepMs = Math.min(champion.timeUntilNextAttackMs, enemy.timeUntilNextAttackMs, remainingMs)
+    const stepMs = Math.min(
+      champion.timeUntilNextAttackMs,
+      enemy.timeUntilNextAttackMs,
+      remainingMs,
+    )
     champion.timeUntilNextAttackMs -= stepMs
     enemy.timeUntilNextAttackMs -= stepMs
     remainingMs -= stepMs

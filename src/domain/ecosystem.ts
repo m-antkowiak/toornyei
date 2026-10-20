@@ -40,7 +40,9 @@ function isPowerOfTwo(count: number): boolean {
 
 export function createBracket(combatants: BracketCombatant[]): Bracket {
   if (!isPowerOfTwo(combatants.length)) {
-    throw new Error(`A bracket needs a power-of-two number of combatants, got ${combatants.length.toString()}`)
+    throw new Error(
+      `A bracket needs a power-of-two number of combatants, got ${combatants.length.toString()}`,
+    )
   }
 
   const rounds: Bracket['rounds'] = [combatants.map((_, slot) => slot)]

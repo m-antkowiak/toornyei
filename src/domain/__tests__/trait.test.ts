@@ -27,13 +27,10 @@ describe('trait', () => {
 
   describe('applyTraits', () => {
     it('adds each traits amount to the matching base stat', () => {
-      const stats = applyTraits(
-        { attackSpeed: 1, damage: 10, hp: 100 },
-        [
-          { stat: 'damage', amount: 5 },
-          { stat: 'hp', amount: 20 },
-        ],
-      )
+      const stats = applyTraits({ attackSpeed: 1, damage: 10, hp: 100 }, [
+        { stat: 'damage', amount: 5 },
+        { stat: 'hp', amount: 20 },
+      ])
 
       expect(stats).toEqual({ attackSpeed: 1, damage: 15, hp: 120 })
     })

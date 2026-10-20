@@ -35,7 +35,10 @@ function createEmptyPlacement(): Placement {
 }
 
 function createDefaultPlacement(): Placement {
-  return Array.from<string | undefined, string>({ length: ENEMY_SLOT_COUNT }, () => DEFAULT_ENEMY_TYPE_ID)
+  return Array.from<string | undefined, string>(
+    { length: ENEMY_SLOT_COUNT },
+    () => DEFAULT_ENEMY_TYPE_ID,
+  )
 }
 
 function parsePlacement(raw: unknown): Placement | undefined {
