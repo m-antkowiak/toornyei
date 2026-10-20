@@ -38,3 +38,7 @@ moving on. Fix any type errors or missing imports immediately.
 ### Issue tracker
 
 Issues live as GitHub Issues in `m-antkowiak/toornyei`, using the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), plus `needs-grilling`. See `docs/agents/triage-labels.md`.
