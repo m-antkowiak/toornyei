@@ -26,11 +26,11 @@ describe('bracketNodePositions', () => {
     expect(positions[levels]).toHaveLength(1)
     for (let round = 1; round <= levels; round++) {
       const column = positions[round]!
-      for (let position = 0; position < column.length; position++) {
+      for (const [position, node] of column.entries()) {
         const upper = positions[round - 1]![position * 2]!
         const lower = positions[round - 1]![position * 2 + 1]!
-        expect(column[position]!.y).toBe((upper.y + lower.y) / 2)
-        expect(column[position]!.x).toBe(upper.x + 200)
+        expect(node.y).toBe((upper.y + lower.y) / 2)
+        expect(node.x).toBe(upper.x + 200)
       }
     }
   })

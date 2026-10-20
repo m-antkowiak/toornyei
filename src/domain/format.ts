@@ -10,8 +10,10 @@ function letterSuffix(letterTier: number): string {
 }
 
 function trimNumber(rounded: number, maxDecimals: number): string {
-  if (Number.isInteger(rounded)) return rounded.toString()
-  return rounded.toFixed(maxDecimals).replace(/0+$/, '').replace(/\.$/, '')
+  if (Number.isSafeInteger(rounded)) return rounded.toString()
+  let trimmed = rounded.toFixed(maxDecimals)
+  while (trimmed.endsWith('0')) trimmed = trimmed.slice(0, -1)
+  return trimmed.endsWith('.') ? trimmed.slice(0, -1) : trimmed
 }
 
 export function formatNumber(value: number, smallDecimals = 1): string {

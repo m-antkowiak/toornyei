@@ -16,16 +16,21 @@ export const initialFraming: CanvasFraming = { frame: { kind: 'all' }, overridde
 
 export function nextFraming(framing: CanvasFraming, event: CanvasFramingEvent): CanvasFraming {
   switch (event.type) {
-    case 'enteredSetup':
+    case 'enteredSetup': {
       return { frame: { kind: 'all' }, overridden: false }
-    case 'roundStarted':
+    }
+    case 'roundStarted': {
       if (framing.overridden) return framing
       return { frame: { kind: 'round', round: event.round }, overridden: false }
-    case 'userMoved':
+    }
+    case 'userMoved': {
       return { ...framing, overridden: true }
-    case 'recentered':
+    }
+    case 'recentered': {
       return { frame: { kind: 'round', round: event.round }, overridden: false }
-    case 'fitAll':
+    }
+    case 'fitAll': {
       return { ...framing, frame: { kind: 'all' } }
+    }
   }
 }

@@ -6,6 +6,7 @@ import pluginUnicorn from 'eslint-plugin-unicorn'
 import { configs as sonarjsConfigs } from 'eslint-plugin-sonarjs'
 import pluginVitest from '@vitest/eslint-plugin'
 import skipFormatting from 'eslint-config-prettier/flat'
+import pluginNoComments from 'eslint-plugin-no-comments'
 
 // To allow more languages other than `ts` in `.vue` files, uncomment the following lines:
 // import { configureVueProject } from '@vue/eslint-config-typescript'
@@ -18,7 +19,7 @@ export default defineConfigWithVueTs(
     files: ['**/*.{vue,ts,mts,tsx}'],
   },
 
-  globalIgnores(['**/dist/**', '**/dist-ssr/**', '**/coverage/**']),
+  globalIgnores(['**/dist/**', '**/dist-ssr/**', '**/coverage/**', '.claude/worktrees/**', '.claude/skills/**', '.agents/**']),
 
   ...pluginVue.configs['flat/essential'],
   vueTsConfigs.recommended,
@@ -48,6 +49,11 @@ export default defineConfigWithVueTs(
     },
   },
   {
+    name: 'app/storage-stub',
+    files: ['vitest.setup.ts'],
+    rules: { 'unicorn/no-null': 'off' },
+  },
+  {
     ...pluginVitest.configs.recommended,
     files: ['src/**/__tests__/*'],
   },
@@ -55,6 +61,13 @@ export default defineConfigWithVueTs(
   {
     ...sonarjsConfigs.recommended,
     files: ['**/*.{vue,ts,mts,tsx}'],
+  },
+
+  {
+    name: 'app/no-comments',
+    files: ['src/**/*.{vue,ts,mts,tsx}'],
+    plugins: { 'no-comments': pluginNoComments },
+    rules: { 'no-comments/disallowComments': ['error', { allow: ['global', 'eslint', 'oxlint'] }] },
   },
 
   ...pluginOxlint.buildFromOxlintConfigFile('.oxlintrc.json'),

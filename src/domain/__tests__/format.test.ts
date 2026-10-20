@@ -4,6 +4,7 @@ import { formatNumber } from '../format'
 describe('format', () => {
   describe('formatNumber', () => {
     it('rounds sub-thousand values to one decimal place', () => {
+      // oxlint-disable-next-line no-loss-of-precision
       expect(formatNumber(100.830999999999999)).toBe('100.8')
     })
 

@@ -8,7 +8,7 @@ const memoryStorage: Storage = {
   },
   clear: () => entries.clear(),
   getItem: (key) => entries.get(key) ?? null,
-  key: (index) => [...entries.keys()][index] ?? null,
+  key: (index) => entries.keys().toArray()[index] ?? null,
   removeItem: (key) => {
     entries.delete(key)
   },
