@@ -47,7 +47,7 @@ function combatantStats(combatant: BracketCombatant): CombatantStats {
 }
 
 function ecosystemFightKey(round: number, index: number): string {
-  return `${round}:${index}`
+  return [round, index].join(':')
 }
 
 export const useRunStore = defineStore('run', () => {

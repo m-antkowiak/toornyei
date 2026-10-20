@@ -13,7 +13,7 @@ const memoryStorage: Storage = {
     entries.delete(key)
   },
   setItem: (key, value) => {
-    entries.set(key, String(value))
+    entries.set(key, value)
   },
 }
 

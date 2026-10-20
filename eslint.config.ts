@@ -22,7 +22,7 @@ export default defineConfigWithVueTs(
   globalIgnores(['**/dist/**', '**/dist-ssr/**', '**/coverage/**', '.claude/worktrees/**', '.claude/skills/**', '.agents/**']),
 
   ...pluginVue.configs['flat/essential'],
-  vueTsConfigs.recommended,
+  vueTsConfigs.recommendedTypeChecked,
   {
     name: 'app/vue-overrides',
     rules: {
@@ -63,6 +63,14 @@ export default defineConfigWithVueTs(
     files: ['**/*.{vue,ts,mts,tsx}'],
   },
 
+  {
+    name: 'app/format-numbers',
+    files: ['src/**/*.{vue,ts,mts,tsx}'],
+    ignores: ['src/**/__tests__/**'],
+    rules: {
+      '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: false }],
+    },
+  },
   {
     name: 'app/no-comments',
     files: ['src/**/*.{vue,ts,mts,tsx}'],

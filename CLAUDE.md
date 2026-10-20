@@ -8,7 +8,7 @@ Well-named identifiers carry the meaning, in `src/` and in any language. ESLint 
 
 ## Number display
 
-Every gameplay number shown to the player (stats, rewards, costs, Trait amounts, currencies) goes through `formatNumber` from `src/domain/format.ts`. Never interpolate a raw number into a template: values come from multiplicative scaling, so raw output looks like `17.490062499999997`. Stats that move in small steps, such as attack speed and Trait amounts, pass `2` as the decimals argument so a step like +0.05 stays visible.
+Every gameplay number shown to the player (stats, rewards, costs, Trait amounts, currencies) goes through `formatNumber` from `src/domain/format.ts`. Values come from multiplicative scaling, so raw output looks like `17.490062499999997`; ESLint (`restrict-template-expressions`) rejects numbers inside template literals. Stats that move in small steps, such as attack speed and Trait amounts, pass `2` as the decimals argument so a step like +0.05 stays visible.
 
 ## Checks
 

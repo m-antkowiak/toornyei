@@ -81,7 +81,7 @@ function statusFor(round: number, position: number, slot: number | undefined): N
 }
 
 function nodeId(round: number, position: number): string {
-  return `${round}:${position}`
+  return [round, position].join(':')
 }
 
 const openEnemySlot = ref<number>()

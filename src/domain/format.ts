@@ -30,7 +30,7 @@ export function formatNumber(value: number, smallDecimals = 1): string {
   if (tier >= SCIENTIFIC_TIER) {
     const exponent = Math.floor(Math.log10(magnitude))
     const mantissa = magnitude / 10 ** exponent
-    return `${sign}${trimNumber(Math.round(mantissa * 100) / 100, 2)}e${exponent}`
+    return `${sign}${trimNumber(Math.round(mantissa * 100) / 100, 2)}e${exponent.toString()}`
   }
 
   const scaled = magnitude / 1000 ** tier
