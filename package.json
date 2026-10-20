@@ -15,6 +15,7 @@
     "lint:eslint": "eslint . --fix --cache",
     "check:oxlint": "oxlint .",
     "check:eslint": "eslint .",
+    "check:format": "oxfmt --check src/",
     "check:types": "vue-tsc --build",
     "check:tests": "vitest run",
     "check": "run-s \"check:*\"",

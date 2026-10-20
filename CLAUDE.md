@@ -12,7 +12,7 @@ Every gameplay number shown to the player (stats, rewards, costs, Trait amounts,
 
 ## Checks
 
-Run `npm run check` (oxlint, ESLint, `vue-tsc`, vitest; no auto-fix) before reporting work done. LSP does not cover `.vue` files or lint.
+Run `npm run check` (oxlint, ESLint, oxfmt, `vue-tsc`, vitest; no auto-fix) before reporting work done. LSP does not cover `.vue` files or lint.
 
 ## Code Intelligence
 
