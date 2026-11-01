@@ -6,7 +6,6 @@ import { useSetupStore, BRACKET_LEVELS, ENEMY_SLOT_COUNT } from '../setup'
 import { ENEMY_CATALOG, findEnemyType } from '@/domain/catalog'
 import { experienceReward } from '@/domain/experience'
 import { goldReward } from '@/domain/gold'
-import { CHAMPION_SLOT } from '@/domain/ecosystem'
 
 const FIGHT_COOLDOWN_MS = 1000
 const WHOLE_BRACKET_MS = 60_000
@@ -140,7 +139,7 @@ describe('run store', () => {
       run.champion.baseStats.damage = 20
 
       run.commitToFight()
-      vi.advanceTimersByTime(6000)
+      vi.advanceTimersByTime(5500)
 
       expect(run.outcome).toBe('champion')
       expect(run.isFighting).toBe(false)
@@ -256,8 +255,8 @@ describe('run store', () => {
     })
   })
 
-  describe('waiting for an opponent', () => {
-    it('waits when the Champion is ready before the next opponent has won its own match', () => {
+  describe('next opponent', () => {
+    it('is ready as soon as the cooldown after a win ends, with no wait on enemy duels', () => {
       const { run } = setupRun()
       makeChampionUnkillable(run)
 
@@ -265,33 +264,8 @@ describe('run store', () => {
       vi.advanceTimersByTime(1000 + FIGHT_COOLDOWN_MS + 500)
 
       expect(run.roundIndex).toBe(1)
-      expect(run.currentEnemy).toBeUndefined()
-      expect(run.isAwaitingOpponent).toBe(true)
-      expect(run.isFighting).toBe(false)
-    })
-
-    it('starts the fight as soon as the opponent has won its match', () => {
-      const { run } = setupRun()
-      makeChampionUnkillable(run)
-      run.commitToFight()
-      vi.advanceTimersByTime(1000 + FIGHT_COOLDOWN_MS + 500)
-      expect(run.isAwaitingOpponent).toBe(true)
-
-      vi.advanceTimersByTime(8000)
-
-      expect(run.isAwaitingOpponent).toBe(false)
       expect(run.currentEnemy).toBeDefined()
-      expect(run.roundIndex).toBe(1)
       expect(run.isFighting).toBe(true)
-    })
-
-    it('is not waiting while fighting or before a run starts', () => {
-      const { run } = setupRun()
-      expect(run.isAwaitingOpponent).toBe(false)
-
-      run.commitToFight()
-
-      expect(run.isAwaitingOpponent).toBe(false)
     })
   })
 
@@ -362,7 +336,7 @@ describe('run store', () => {
   })
 
   describe('ecosystem', () => {
-    it("duels enemies not engaged by the champion, transferring the loser's traits to the winner", () => {
+    it("resolves duels between enemies the champion is not engaged with at once, transferring the loser's traits to the winner", () => {
       const { run, setup, progression } = setupRun()
       setup.didPlaceType(1, 'raider')
       setup.didPlaceType(2, 'grunt')
@@ -373,7 +347,6 @@ describe('run store', () => {
       run.champion.baseStats.hp = 100_000
 
       run.commitToFight()
-      vi.advanceTimersByTime(1000)
 
       const winner = run.bracket!.combatants[2]
       const loser = run.bracket!.combatants[3]
@@ -406,52 +379,25 @@ describe('run store', () => {
       expect(run.champion.traits).toEqual(baselineTraits)
     })
 
-    it('exposes currently live non-Champion matches, and stops exposing them once resolved', () => {
-      const { run, setup, progression } = setupRun()
-      setup.didPlaceType(1, 'raider')
-      setup.didPlaceType(2, 'grunt')
-      progressOf(progression, 'raider').baseStats.damage = 1000
-      run.champion.baseStats.damage = 0
-      run.champion.baseStats.hp = 100_000
+    it('leaves no enemy duel for the champion to wait on', () => {
+      const { run } = setupRun()
 
       run.commitToFight()
 
-      expect(run.liveEnemyMatches.some((match) => match.round === 0 && match.index === 1)).toBe(
-        true,
-      )
-      expect(run.liveEnemyMatches.every((match) => match.first !== CHAMPION_SLOT)).toBe(true)
-
-      vi.advanceTimersByTime(1000)
-
-      expect(run.liveEnemyMatches.some((match) => match.round === 0 && match.index === 1)).toBe(
-        false,
-      )
+      expect(run.currentEnemy).toBeDefined()
+      expect(run.bracket!.rounds[1]!.slice(1).every((slot) => slot !== undefined)).toBe(true)
     })
 
-    it('stops duelling once the run has concluded', () => {
-      const stores = setupRun()
-      loseFirstFight(stores)
-      expect(stores.run.runStatus).toBe('defeated')
-
-      const snapshot = JSON.stringify(stores.run.bracket)
-      vi.advanceTimersByTime(60_000)
-
-      expect(JSON.stringify(stores.run.bracket)).toBe(snapshot)
-    })
-
-    it('wipes ecosystem-earned traits and experience on restart', () => {
+    it('rebuilds the enemy duels from the setup on restart instead of stacking them on the last run', () => {
       const stores = setupRun()
       stores.setup.didPlaceType(1, 'raider')
       progressOf(stores.progression, 'raider').baseStats.damage = 1000
       loseFirstFight(stores)
-      const duelled = stores.run.bracket!.combatants[2]!
-      expect(duelled.traits.length).toBeGreaterThan(1)
+      const afterFirstRun = JSON.stringify(stores.run.bracket!.combatants[2])
 
       stores.run.restart()
 
-      const fresh = stores.run.bracket!.combatants[2]!
-      expect(fresh.traits).toEqual([findEnemyType('raider')!.trait])
-      expect(fresh.experienceValue).toBe(findEnemyType('raider')!.experienceValue)
+      expect(JSON.stringify(stores.run.bracket!.combatants[2])).toBe(afterFirstRun)
     })
   })
 

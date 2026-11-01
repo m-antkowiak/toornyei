@@ -3,6 +3,7 @@ import { defineStore, acceptHMRUpdate } from 'pinia'
 import {
   createFight,
   advanceFight,
+  predictFightOutcome,
   type FightState,
   type FightCombatant,
   type FightOutcome,
@@ -16,7 +17,6 @@ import {
   CHAMPION_SLOT,
   type Bracket,
   type BracketCombatant,
-  type BracketMatch,
 } from '@/domain/ecosystem'
 import { ENEMY_CATALOG } from '@/domain/catalog'
 import { experienceReward } from '@/domain/experience'
@@ -46,10 +46,6 @@ function combatantStats(combatant: BracketCombatant): CombatantStats {
   return applyTraits(combatant.baseStats, combatant.traits)
 }
 
-function ecosystemFightKey(round: number, index: number): string {
-  return [round, index].join(':')
-}
-
 export const useRunStore = defineStore('run', () => {
   const progression = useProgressionStore()
   const setup = useSetupStore()
@@ -66,10 +62,6 @@ export const useRunStore = defineStore('run', () => {
   const cooldownRemainingMs = ref(0)
   let intervalId: ReturnType<typeof setInterval> | undefined
   let lastTickAt = 0
-
-  const ecosystemFights = new Map<string, FightState>()
-  let ecosystemIntervalId: ReturnType<typeof setInterval> | undefined
-  let lastEcosystemTickAt = 0
 
   function catalogIndexOfSlot(slot: number): number {
     return ENEMY_CATALOG.findIndex((type) => type.id === setup.placement[slot - 1])
@@ -97,11 +89,6 @@ export const useRunStore = defineStore('run', () => {
       ? liveMatches(bracket.value).find((match) => match.first === CHAMPION_SLOT)
       : undefined,
   )
-  const liveEnemyMatches = computed<BracketMatch[]>(() =>
-    bracket.value
-      ? liveMatches(bracket.value).filter((match) => match.first !== CHAMPION_SLOT)
-      : [],
-  )
   const currentEnemy = computed(() =>
     championMatch.value ? bracket.value!.combatants[championMatch.value.second] : undefined,
   )
@@ -125,55 +112,24 @@ export const useRunStore = defineStore('run', () => {
     isRunning.value = false
   }
 
-  function tickEcosystem(elapsedMs: number) {
+  function resolveEnemyDuels() {
     if (!bracket.value) return
-    const matches = liveEnemyMatches.value
-    const liveKeys = new Set(matches.map((match) => ecosystemFightKey(match.round, match.index)))
-
-    for (const key of ecosystemFights.keys()) {
-      if (!liveKeys.has(key)) ecosystemFights.delete(key)
+    for (;;) {
+      const match = liveMatches(bracket.value).find(
+        (candidate) => candidate.first !== CHAMPION_SLOT,
+      )
+      if (!match) return
+      const outcome = predictFightOutcome(
+        combatantStats(bracket.value.combatants[match.first]!),
+        combatantStats(bracket.value.combatants[match.second]!),
+      )
+      didResolveMatch(bracket.value, match.round, match.index, outcome)
     }
-
-    for (const match of matches) {
-      const key = ecosystemFightKey(match.round, match.index)
-      let duel = ecosystemFights.get(key)
-      if (!duel) {
-        duel = createFight(
-          combatantStats(bracket.value.combatants[match.first]!),
-          combatantStats(bracket.value.combatants[match.second]!),
-        )
-        ecosystemFights.set(key, duel)
-      }
-
-      advanceFight(duel, elapsedMs)
-      if (duel.outcome !== undefined) {
-        didResolveMatch(bracket.value, match.round, match.index, duel.outcome)
-        ecosystemFights.delete(key)
-      }
-    }
-  }
-
-  function stopEcosystemTicking() {
-    if (ecosystemIntervalId === undefined) return
-    clearInterval(ecosystemIntervalId)
-    ecosystemIntervalId = undefined
-  }
-
-  function startEcosystemTicking() {
-    stopEcosystemTicking()
-    lastEcosystemTickAt = Date.now()
-    ecosystemIntervalId = setInterval(() => {
-      const now = Date.now()
-      const elapsedMs = now - lastEcosystemTickAt
-      lastEcosystemTickAt = now
-      tickEcosystem(elapsedMs)
-    }, TICK_INTERVAL_MS)
   }
 
   function endRun(status: 'defeated' | 'victorious') {
     runStatus.value = status
     stopTicking()
-    stopEcosystemTicking()
   }
 
   function resolveFightOutcome(result: FightOutcome) {
@@ -236,9 +192,8 @@ export const useRunStore = defineStore('run', () => {
     if (!enemies) return false
 
     stopTicking()
-    stopEcosystemTicking()
-    ecosystemFights.clear()
     bracket.value = createBracket([champion, ...enemies])
+    resolveEnemyDuels()
     roundIndex.value = 0
     cooldownRemainingMs.value = 0
     fight.value = undefined
@@ -250,14 +205,11 @@ export const useRunStore = defineStore('run', () => {
     lastTickAt = Date.now()
     isRunning.value = true
     intervalId = setInterval(tick, TICK_INTERVAL_MS)
-    startEcosystemTicking()
     return true
   }
 
   function resetToSetup() {
     stopTicking()
-    stopEcosystemTicking()
-    ecosystemFights.clear()
     Object.assign(champion, createChampion())
     bracket.value = undefined
     roundIndex.value = 0
@@ -308,13 +260,6 @@ export const useRunStore = defineStore('run', () => {
     cooldownRemainingMs.value > 0 ? 1 - cooldownRemainingMs.value / FIGHT_COOLDOWN_MS : 0,
   )
   const isFighting = computed(() => fight.value !== undefined && fight.value.outcome === undefined)
-  const isAwaitingOpponent = computed(
-    () =>
-      runStatus.value === 'active' &&
-      fight.value === undefined &&
-      cooldownRemainingMs.value === 0 &&
-      currentEnemy.value === undefined,
-  )
 
   function attackProgressOf(getCombatant: () => FightCombatant | undefined) {
     return computed(() => {
@@ -337,13 +282,11 @@ export const useRunStore = defineStore('run', () => {
     currentEnemy,
     currentEnemyStats,
     currentEnemyRewards,
-    liveEnemyMatches,
     outcome,
     championHp,
     enemyHp,
     isFighting,
     isRunning,
-    isAwaitingOpponent,
     cooldownProgress,
     championAttackProgress,
     enemyAttackProgress,

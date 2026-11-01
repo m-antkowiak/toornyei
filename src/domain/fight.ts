@@ -69,3 +69,14 @@ export function advanceFight(fight: FightState, elapsedMs: number): FightState {
 
   return fight
 }
+
+const MAX_PREDICTED_FIGHT_MS = 3_600_000
+
+export function predictFightOutcome(first: CombatantStats, second: CombatantStats): FightOutcome {
+  const fight = createFight(first, second)
+  advanceFight(fight, MAX_PREDICTED_FIGHT_MS)
+  if (fight.outcome !== undefined) return fight.outcome
+  const firstShare = fight.champion.currentHp / fight.champion.hp
+  const secondShare = fight.enemy.currentHp / fight.enemy.hp
+  return secondShare > firstShare ? 'enemy' : 'champion'
+}

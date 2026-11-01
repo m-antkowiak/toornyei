@@ -41,7 +41,6 @@ function hardReset() {
       <p v-else-if="run.runStatus === 'defeated'" class="status">
         Your Champion has fallen. Restart or Edit your setup.
       </p>
-      <p v-else-if="run.isAwaitingOpponent" class="status">Awaiting the next opponent...</p>
       <p v-else-if="run.outcome === 'champion'" class="status">Champion wins!</p>
       <div v-if="run.runStatus === 'active'" class="stat-row">
         <span>Round</span>

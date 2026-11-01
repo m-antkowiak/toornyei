@@ -6,25 +6,12 @@ import { useRunStore } from '@/stores/run'
 import { useSetupStore, BRACKET_LEVELS } from '@/stores/setup'
 import { ENEMY_CATALOG, findEnemyType } from '@/domain/catalog'
 import { formatNumber } from '@/domain/format'
-import {
-  CHAMPION_SLOT,
-  bracketRoundSizes,
-  winsOf,
-  type BracketCombatant,
-  type BracketMatch,
-} from '@/domain/ecosystem'
+import { CHAMPION_SLOT, bracketRoundSizes, winsOf, type BracketCombatant } from '@/domain/ecosystem'
 import type { Trait } from '@/domain/trait'
 import { bracketNodePositions } from '@/domain/bracketLayout'
 import { initialFraming, nextFraming, type CanvasFramingEvent } from '@/domain/canvasFraming'
 
-type NodeStatus =
-  | 'champion'
-  | 'current-opponent'
-  | 'live'
-  | 'advanced'
-  | 'eliminated'
-  | 'pending'
-  | 'empty'
+type NodeStatus = 'champion' | 'current-opponent' | 'advanced' | 'eliminated' | 'pending' | 'empty'
 
 interface NodeStats {
   hp: number
@@ -106,12 +93,6 @@ function winsForSlot(slot: number | undefined): NodeWin[] {
   }))
 }
 
-function isInMatch(matches: BracketMatch[], round: number, slot: number): boolean {
-  return matches.some(
-    (match) => match.round === round && (match.first === slot || match.second === slot),
-  )
-}
-
 function didAdvance(round: number, position: number, slot: number): boolean | undefined {
   const nextRound = run.bracket?.rounds[round + 1]
   if (!nextRound) return undefined
@@ -125,7 +106,6 @@ function statusFor(round: number, position: number, slot: number | undefined): N
   if (slot === CHAMPION_SLOT) return 'champion'
   if (run.currentEnemy && run.bracket?.combatants[slot] === run.currentEnemy)
     return 'current-opponent'
-  if (isInMatch(run.liveEnemyMatches, round, slot)) return 'live'
 
   const advanced = didAdvance(round, position, slot)
   if (advanced === true) return 'advanced'
@@ -297,7 +277,6 @@ onMoveStart(({ event }) => {
           <Handle type="source" :position="Position.Right" />
           <span class="icon">{{ data.icon }}</span>
           <span class="label">{{ data.label }}</span>
-          <span v-if="data.status === 'live'" class="live-dot" aria-label="live duel" />
           <div v-if="data.stats" class="detail">
             HP {{ formatNumber(data.stats.hp) }} · DMG {{ formatNumber(data.stats.damage) }}
             <template v-if="data.stats.traits.length > 0">
@@ -499,15 +478,5 @@ onMoveStart(({ event }) => {
 .status-empty {
   border-style: dashed;
   opacity: 0.6;
-}
-
-.live-dot {
-  position: absolute;
-  top: -0.25rem;
-  right: -0.25rem;
-  width: 0.6rem;
-  height: 0.6rem;
-  border-radius: 999px;
-  background: hsla(160, 100%, 37%, 1);
 }
 </style>
