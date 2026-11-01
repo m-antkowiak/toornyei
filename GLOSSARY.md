@@ -82,6 +82,8 @@ _Avoid_: XP as the canonical term (fine as shorthand), Stats (Experience and Sta
 
 - **Post-click-fatigue progression roadmap** (2026-09-17 session): four future epics to make late-game progression more than "just clicking," tracked as GitHub issues rather than detailed here — Rung modifiers (#14), Prestige token + Ladder Level + new meta store (#7, fully specced via a 2026-09-21 `/grilling` pass — ready for agent), Per-aspect Champion experience with per-stat automation (#15), Blood/bones drops → buildings/altars (#16, least designed of the four). Priority order: #14/#7 first, #15 second, #16 last. #14, #15, #16 still have sub-decisions explicitly open — see each issue's "deferred" section.
 
+- **Champion HP regeneration and Knockout** (parked, from #9): a Champion currently enters every Fight at full HP, so there is nothing to regenerate. Whether the Champion ever gains regeneration (as a stat, an upgrade, or by taking HP from an Enemy), whether HP carries over between won rounds, and whether a loss could lock the Champion out for a recovery period (informally "Knockout", which would reverse the no-cooldown loss in Run) are all undecided. To be designed together with the major-upgrade work (#14 to #16), not before.
+
 ## Explicitly deferred (not building now)
 
 - **Offline progress**: the Ladder does not simulate time while the app/tab is fully closed. A future "online" mode may add this. The app must, however, keep ticking in real time while merely backgrounded (a different browser tab focused), not just while foregrounded.
