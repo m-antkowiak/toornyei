@@ -6,7 +6,14 @@ import { useRunStore } from '@/stores/run'
 import { useSetupStore, BRACKET_LEVELS } from '@/stores/setup'
 import { ENEMY_CATALOG, findEnemyType } from '@/domain/catalog'
 import { formatNumber } from '@/domain/format'
-import { CHAMPION_SLOT, bracketRoundSizes, type BracketMatch } from '@/domain/ecosystem'
+import {
+  CHAMPION_SLOT,
+  bracketRoundSizes,
+  winsOf,
+  type BracketCombatant,
+  type BracketMatch,
+} from '@/domain/ecosystem'
+import type { Trait } from '@/domain/trait'
 import { bracketNodePositions } from '@/domain/bracketLayout'
 import { initialFraming, nextFraming, type CanvasFramingEvent } from '@/domain/canvasFraming'
 
@@ -19,10 +26,26 @@ type NodeStatus =
   | 'pending'
   | 'empty'
 
+interface NodeStats {
+  hp: number
+  damage: number
+  attackSpeed: number
+  traits: Trait[]
+}
+
+interface NodeWin {
+  round: number
+  defeatedName: string
+  absorbedTraits: Trait[]
+}
+
 interface BracketNodeData {
   label: string
   icon: string
   status: NodeStatus
+  stats: NodeStats | undefined
+  wins: NodeWin[]
+  isHistoryOpen: boolean
   enemySlot: number | undefined
   currentTypeId: string | undefined
   isPickerOpen: boolean
@@ -54,6 +77,33 @@ function iconForSlot(slot: number | undefined): string {
   const typeId = setup.placement[slot - 1]
   const type = typeId ? findEnemyType(typeId) : undefined
   return type ? type.name.charAt(0).toUpperCase() : '·'
+}
+
+function statsForSlot(slot: number | undefined): NodeStats | undefined {
+  if (slot === undefined) return undefined
+  const combatant: BracketCombatant | undefined = run.bracket?.combatants[slot]
+  if (combatant) {
+    return {
+      hp: combatant.baseStats.hp,
+      damage: combatant.baseStats.damage,
+      attackSpeed: combatant.baseStats.attackSpeed,
+      traits: combatant.traits,
+    }
+  }
+  if (slot === CHAMPION_SLOT) return undefined
+  const typeId = setup.placement[slot - 1]
+  const type = typeId ? findEnemyType(typeId) : undefined
+  if (!type) return undefined
+  return { ...type.baseStats, traits: [type.trait] }
+}
+
+function winsForSlot(slot: number | undefined): NodeWin[] {
+  if (slot === undefined || !run.bracket) return []
+  return winsOf(run.bracket, slot).map((win) => ({
+    round: win.round,
+    defeatedName: nameForSlot(win.defeatedSlot),
+    absorbedTraits: win.absorbedTraits,
+  }))
 }
 
 function isInMatch(matches: BracketMatch[], round: number, slot: number): boolean {
@@ -88,6 +138,8 @@ function nodeId(round: number, position: number): string {
 }
 
 const openEnemySlot = ref<number>()
+const openHistoryNode = ref<string>()
+const isSetupMode = computed(() => run.runStatus === 'setup')
 const isPlacementOpen = computed(() => run.runStatus === 'setup' && !setup.isLocked)
 
 function enemySlotAt(round: number, position: number): number | undefined {
@@ -115,21 +167,27 @@ const nodes = computed<Node<BracketNodeData>[]>(() => {
       const slot = slotAt(round, position)
       const status = statusFor(round, position, slot)
       const enemySlot = enemySlotAt(round, position)
+      const id = nodeId(round, position)
+      const wins = winsForSlot(slot)
+      const stats = statsForSlot(slot)
       const isPickerOpen =
         enemySlot !== undefined && enemySlot === openEnemySlot.value && isPlacementOpen.value
       built.push({
-        id: nodeId(round, position),
+        id,
         type: 'bracket',
         position: positions[round]![position]!,
         data: {
           label: nameForSlot(slot),
           icon: iconForSlot(slot),
           status,
+          stats,
+          wins,
+          isHistoryOpen: wins.length > 0 && openHistoryNode.value === id,
           enemySlot,
           currentTypeId: enemySlot === undefined ? undefined : setup.placement[enemySlot],
           isPickerOpen,
         },
-        zIndex: isPickerOpen ? 1000 : 0,
+        zIndex: isPickerOpen || openHistoryNode.value === id ? 1000 : 0,
         draggable: false,
         connectable: false,
       })
@@ -203,13 +261,21 @@ onNodesInitialized(() => {
 
 onNodeClick(({ node }) => {
   const enemySlot = (node.data as BracketNodeData).enemySlot
-  if (enemySlot === undefined || !isPlacementOpen.value) return
-  openEnemySlot.value = openEnemySlot.value === enemySlot ? undefined : enemySlot
+  if (enemySlot !== undefined && isPlacementOpen.value) {
+    openEnemySlot.value = openEnemySlot.value === enemySlot ? undefined : enemySlot
+    return
+  }
+  openHistoryNode.value = openHistoryNode.value === node.id ? undefined : node.id
 })
 
 onPaneClick(() => {
   openEnemySlot.value = undefined
+  openHistoryNode.value = undefined
 })
+
+function traitLabel(trait: Trait): string {
+  return [trait.stat, '+', formatNumber(trait.amount, 2)].join(' ')
+}
 
 onMoveStart(({ event }) => {
   if (event?.sourceEvent) dispatch({ type: 'userMoved' })
@@ -220,12 +286,33 @@ onMoveStart(({ event }) => {
   <div class="canvas">
     <VueFlow :nodes="nodes" :edges="edges" :nodes-draggable="false" :zoom-on-double-click="false">
       <template #node-bracket="{ data }">
-        <div class="bracket-node" :class="`status-${data.status}`">
+        <div
+          class="bracket-node"
+          :class="[
+            `status-${data.status}`,
+            { 'is-setup': isSetupMode, 'is-open': data.isHistoryOpen },
+          ]"
+        >
           <Handle type="target" :position="Position.Left" />
           <Handle type="source" :position="Position.Right" />
           <span class="icon">{{ data.icon }}</span>
           <span class="label">{{ data.label }}</span>
           <span v-if="data.status === 'live'" class="live-dot" aria-label="live duel" />
+          <div v-if="data.stats" class="detail">
+            HP {{ formatNumber(data.stats.hp) }} · DMG {{ formatNumber(data.stats.damage) }}
+            <template v-if="data.stats.traits.length > 0">
+              · {{ data.stats.traits.map(traitLabel).join(', ') }}
+            </template>
+          </div>
+          <div v-if="data.isHistoryOpen" class="history nopan nodrag nowheel" @click.stop>
+            <strong>Beat</strong>
+            <div v-for="win in data.wins" :key="win.round" class="history-entry">
+              Round {{ formatNumber(win.round + 1) }}: {{ win.defeatedName }}
+              <span v-if="win.absorbedTraits.length > 0">
+                — {{ win.absorbedTraits.map(traitLabel).join(', ') }}
+              </span>
+            </div>
+          </div>
           <div v-if="data.isPickerOpen" class="picker nopan nodrag nowheel" @click.stop>
             <button
               v-for="type in ENEMY_CATALOG"
@@ -316,6 +403,43 @@ onMoveStart(({ event }) => {
   background: var(--color-background-mute);
   font-weight: bold;
   flex-shrink: 0;
+}
+
+.detail {
+  display: none;
+  position: absolute;
+  top: calc(100% + 0.2rem);
+  left: 0;
+  z-index: 2;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-background);
+  font-size: 0.65rem;
+}
+
+.bracket-node.is-setup .detail,
+.bracket-node:hover .detail,
+.bracket-node.is-open .detail {
+  display: block;
+}
+
+.history {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 0.75rem);
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  width: 16rem;
+  padding: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-background);
+  white-space: normal;
+  font-size: 0.7rem;
+  cursor: default;
 }
 
 .picker {

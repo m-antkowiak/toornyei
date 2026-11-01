@@ -6,6 +6,7 @@ import {
   liveMatches,
   didResolveMatch,
   roundSurvivors,
+  winsOf,
   type BracketCombatant,
 } from '../ecosystem'
 
@@ -188,6 +189,79 @@ describe('bracket', () => {
 
       expect(didResolveMatch(bracket, 0, 5, 'champion')).toBe(false)
       expect(didResolveMatch(bracket, 9, 0, 'champion')).toBe(false)
+    })
+  })
+
+  describe('winsOf', () => {
+    it('is empty for a slot that has not won anything', () => {
+      const bracket = createBracket(combatants(4))
+
+      expect(winsOf(bracket, 0)).toEqual([])
+    })
+
+    it('records the round, the defeated slot and the traits the winner absorbed', () => {
+      const bracket = createBracket([
+        combatant(),
+        combatant({
+          traits: [
+            { stat: 'damage', amount: 3 },
+            { stat: 'hp', amount: 20 },
+          ],
+        }),
+        combatant(),
+        combatant(),
+      ])
+
+      didResolveMatch(bracket, 0, 0, 'champion')
+
+      expect(winsOf(bracket, 0)).toEqual([
+        {
+          round: 0,
+          defeatedSlot: 1,
+          absorbedTraits: [
+            { stat: 'damage', amount: 3 },
+            { stat: 'hp', amount: 20 },
+          ],
+        },
+      ])
+    })
+
+    it('lists a bracket-long winner wins in round order, each carrying what the loser held at the time', () => {
+      const bracket = createBracket([
+        combatant({ traits: [{ stat: 'damage', amount: 1 }] }),
+        combatant({ traits: [{ stat: 'damage', amount: 2 }] }),
+        combatant({ traits: [{ stat: 'damage', amount: 4 }] }),
+        combatant({ traits: [{ stat: 'damage', amount: 8 }] }),
+      ])
+
+      didResolveMatch(bracket, 0, 0, 'enemy')
+      didResolveMatch(bracket, 0, 1, 'enemy')
+      didResolveMatch(bracket, 1, 0, 'champion')
+
+      expect(winsOf(bracket, 1)).toEqual([
+        { round: 0, defeatedSlot: 0, absorbedTraits: [{ stat: 'damage', amount: 1 }] },
+        { round: 1, defeatedSlot: 3, absorbedTraits: [{ stat: 'damage', amount: 12 }] },
+      ])
+    })
+
+    it('does not record anything for a refused match', () => {
+      const bracket = createBracket(combatants(4))
+      didResolveMatch(bracket, 0, 0, 'champion')
+
+      didResolveMatch(bracket, 0, 0, 'enemy')
+
+      expect(winsOf(bracket, 1)).toEqual([])
+      expect(winsOf(bracket, 0)).toHaveLength(1)
+    })
+
+    it('keeps the absorbed traits independent of later changes to the loser', () => {
+      const slots = [combatant(), combatant({ traits: [{ stat: 'hp', amount: 5 }] })]
+      const bracket = createBracket(slots)
+
+      didResolveMatch(bracket, 0, 0, 'champion')
+
+      expect(slots[1]!.traits).toEqual([])
+      expect(winsOf(bracket, 0)[0]!.absorbedTraits).toEqual([{ stat: 'hp', amount: 5 }])
     })
   })
 

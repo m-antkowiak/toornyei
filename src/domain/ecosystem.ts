@@ -17,9 +17,17 @@ export interface BracketMatch {
   second: number
 }
 
+export interface BracketWin {
+  winnerSlot: number
+  round: number
+  defeatedSlot: number
+  absorbedTraits: Trait[]
+}
+
 export interface Bracket {
   combatants: BracketCombatant[]
   rounds: Array<Array<number | undefined>>
+  wins: BracketWin[]
 }
 
 export const CHAMPION_SLOT = 0
@@ -49,7 +57,7 @@ export function createBracket(combatants: BracketCombatant[]): Bracket {
   for (let size = combatants.length / 2; size >= 1; size /= 2) {
     rounds.push(Array.from<number | undefined>({ length: size }))
   }
-  return { combatants, rounds }
+  return { combatants, rounds, wins: [] }
 }
 
 function matchAt(bracket: Bracket, round: number, index: number): BracketMatch | undefined {
@@ -91,6 +99,13 @@ export function didResolveMatch(
   const winner = bracket.combatants[winnerSlot]!
   const loser = bracket.combatants[loserSlot]!
 
+  bracket.wins.push({
+    winnerSlot,
+    round,
+    defeatedSlot: loserSlot,
+    absorbedTraits: loser.traits.map((trait) => ({ ...trait })),
+  })
+
   winner.traits = mergeTraitSets(winner.traits, loser.traits)
   loser.traits = []
   winner.experienceValue = mergeExperience(winner.experienceValue, loser.experienceValue)
@@ -105,4 +120,10 @@ export function didResolveMatch(
 export function roundSurvivors(bracket: Bracket, round: number): number[] {
   const entrants = bracket.rounds[round] ?? []
   return entrants.filter((slot): slot is number => slot !== undefined)
+}
+
+export function winsOf(bracket: Bracket, slot: number): Array<Omit<BracketWin, 'winnerSlot'>> {
+  return bracket.wins
+    .filter((win) => win.winnerSlot === slot)
+    .map(({ round, defeatedSlot, absorbedTraits }) => ({ round, defeatedSlot, absorbedTraits }))
 }
