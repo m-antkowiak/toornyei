@@ -18,11 +18,11 @@ import RunHud from '@/components/RunHud.vue'
   display: flex;
   gap: 1.5rem;
   align-items: flex-start;
-  height: calc(100vh - 8rem);
+  height: calc(100vh - 2rem);
 }
 
 .main-column {
-  flex: 1;
+  flex: 0 0 50%;
   min-width: 0;
   display: flex;
   flex-direction: column;
