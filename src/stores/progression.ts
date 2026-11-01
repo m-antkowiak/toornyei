@@ -3,8 +3,17 @@ import { defineStore, acceptHMRUpdate } from 'pinia'
 import type { CombatantStats } from '@/domain/fight'
 import { ENEMY_CATALOG } from '@/domain/catalog'
 import { upgradeCost, upgradeStats, upgradeReward } from '@/domain/upgrade'
+import type { FightTally } from '@/domain/fight'
+import {
+  accumulatePassiveExp,
+  createPassiveGrowthState,
+  hasPassiveSource,
+  PASSIVE_GROWTH_RULES,
+  type PassiveGrowthState,
+} from '@/domain/passiveGrowth'
 import {
   championUpgradeCost,
+  CHAMPION_UPGRADE_KINDS,
   createChampionUpgradeLevels,
   type ChampionUpgradeKind,
 } from '@/domain/championUpgrade'
@@ -45,6 +54,46 @@ function savePersistedMeta(meta: PersistedMeta) {
   } catch {
     return
   }
+}
+
+const PASSIVE_STORAGE_KEY = 'toornyei:passive'
+
+function isNonNegativeNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+}
+
+function loadPassiveGrowth(): PassiveGrowthState {
+  const state = createPassiveGrowthState()
+  try {
+    const raw = localStorage.getItem(PASSIVE_STORAGE_KEY)
+    if (raw === null) return state
+    const parsed = JSON.parse(raw) as Partial<
+      Record<ChampionUpgradeKind, { unlocked?: unknown; exp?: unknown; level?: unknown }>
+    > | null
+    if (!parsed) return state
+    for (const kind of CHAMPION_UPGRADE_KINDS) {
+      const stored = parsed[kind]
+      if (!stored) continue
+      if (typeof stored.unlocked === 'boolean') state[kind].unlocked = stored.unlocked
+      if (isNonNegativeNumber(stored.exp)) state[kind].exp = stored.exp
+      if (isNonNegativeNumber(stored.level)) state[kind].level = Math.floor(stored.level)
+    }
+    return state
+  } catch {
+    return createPassiveGrowthState()
+  }
+}
+
+function savePassiveGrowth(state: PassiveGrowthState) {
+  try {
+    localStorage.setItem(PASSIVE_STORAGE_KEY, JSON.stringify(state))
+  } catch {
+    return
+  }
+}
+
+function passiveUnlockCostOf(kind: ChampionUpgradeKind): number {
+  return PASSIVE_GROWTH_RULES[kind].unlockCost
 }
 
 export interface EnemyProgress {
@@ -92,6 +141,24 @@ export const useProgressionStore = defineStore('progression', () => {
     { deep: true, flush: 'sync' },
   )
   const enemyProgress = ref(createEnemyProgress())
+  const passiveGrowth = ref(loadPassiveGrowth())
+
+  watch(passiveGrowth, (state) => savePassiveGrowth(state), { deep: true, flush: 'sync' })
+
+  function grantPassiveActions(tally: FightTally) {
+    accumulatePassiveExp(passiveGrowth.value, tally)
+  }
+
+  function didUnlockPassive(kind: ChampionUpgradeKind): boolean {
+    const stat = passiveGrowth.value[kind]
+    if (stat.unlocked || !hasPassiveSource(kind)) return false
+    const cost = passiveUnlockCostOf(kind)
+    if (experience.value < cost) return false
+
+    experience.value -= cost
+    stat.unlocked = true
+    return true
+  }
 
   function grantExperience(amount: number) {
     experience.value += amount
@@ -106,6 +173,7 @@ export const useProgressionStore = defineStore('progression', () => {
     ladderLevel.value += 1
     experience.value = 0
     championUpgrades.value = createChampionUpgradeLevels()
+    passiveGrowth.value = createPassiveGrowthState()
   }
 
   function didPurchaseMetaUnlock(id: string): boolean {
@@ -122,6 +190,7 @@ export const useProgressionStore = defineStore('progression', () => {
     experience.value = 0
     gold.value = 0
     championUpgrades.value = createChampionUpgradeLevels()
+    passiveGrowth.value = createPassiveGrowthState()
     prestigeTokens.value = 0
     ladderLevel.value = 0
     metaUnlocks.value = META_UNLOCK_IDS.map((id) => ({ id, unlocked: false }))
@@ -170,6 +239,10 @@ export const useProgressionStore = defineStore('progression', () => {
     experience,
     gold,
     championUpgrades,
+    passiveGrowth,
+    grantPassiveActions,
+    passiveUnlockCostOf,
+    didUnlockPassive,
     prestigeTokens,
     ladderLevel,
     metaUnlocks,

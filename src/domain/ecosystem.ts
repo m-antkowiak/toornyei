@@ -2,6 +2,7 @@ import type { CombatantStats, FightOutcome } from './fight'
 import { mergeTraitSets, type Trait } from './trait'
 import { mergeExperience } from './experience'
 import { mergeGold } from './gold'
+import { rewardScale, type ModifierEffect } from './matchModifier'
 
 export interface BracketCombatant {
   baseStats: CombatantStats
@@ -90,6 +91,7 @@ export function didResolveMatch(
   round: number,
   index: number,
   outcome: FightOutcome,
+  effects: readonly ModifierEffect[] = [],
 ): boolean {
   const match = matchAt(bracket, round, index)
   if (!match) return false
@@ -99,18 +101,26 @@ export function didResolveMatch(
   const winner = bracket.combatants[winnerSlot]!
   const loser = bracket.combatants[loserSlot]!
 
-  bracket.wins.push({
-    winnerSlot,
-    round,
-    defeatedSlot: loserSlot,
-    absorbedTraits: loser.traits.map((trait) => ({ ...trait })),
-  })
+  const isLoserChampion = loserSlot === CHAMPION_SLOT
+  const traitScale = rewardScale(effects, 'traitAmount', isLoserChampion)
+  const absorbedTraits = loser.traits.map((trait) => ({
+    ...trait,
+    amount: trait.amount * traitScale,
+  }))
 
-  winner.traits = mergeTraitSets(winner.traits, loser.traits)
+  bracket.wins.push({ winnerSlot, round, defeatedSlot: loserSlot, absorbedTraits })
+
+  winner.traits = mergeTraitSets(winner.traits, absorbedTraits)
   loser.traits = []
-  winner.experienceValue = mergeExperience(winner.experienceValue, loser.experienceValue)
+  winner.experienceValue = mergeExperience(
+    winner.experienceValue,
+    loser.experienceValue * rewardScale(effects, 'experienceValue', isLoserChampion),
+  )
   loser.experienceValue = 0
-  winner.goldValue = mergeGold(winner.goldValue, loser.goldValue)
+  winner.goldValue = mergeGold(
+    winner.goldValue,
+    loser.goldValue * rewardScale(effects, 'goldValue', isLoserChampion),
+  )
   loser.goldValue = 0
 
   bracket.rounds[round + 1]![index] = winnerSlot

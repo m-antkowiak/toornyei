@@ -5,16 +5,33 @@ import { useSetupStore } from '@/stores/setup'
 import { useProgressionStore } from '@/stores/progression'
 import { formatNumber } from '@/domain/format'
 import { CHAMPION_UPGRADE_KINDS, type ChampionUpgradeKind } from '@/domain/championUpgrade'
+import { useMatchModifierStore } from '@/stores/matchModifier'
+import { describeEffect, MODIFIER_DRAG_MIME, type MatchModifier } from '@/domain/matchModifier'
+import {
+  hasPassiveSource,
+  passiveLevelCost,
+  passiveMultiplier,
+  PASSIVE_GROWTH_RULES,
+} from '@/domain/passiveGrowth'
 
 const run = useRunStore()
 const setup = useSetupStore()
 const progression = useProgressionStore()
+const modifiers = useMatchModifierStore()
+const passiveKinds = CHAMPION_UPGRADE_KINDS.filter(hasPassiveSource)
+
+function startOfferDrag(event: DragEvent, modifier: MatchModifier) {
+  if (!event.dataTransfer) return
+  event.dataTransfer.setData(MODIFIER_DRAG_MIME, JSON.stringify({ from: 'offer', id: modifier.id }))
+  event.dataTransfer.effectAllowed = 'move'
+}
 const isDevelopment = import.meta.env.DEV
 
 const championUpgradeLabels: Record<ChampionUpgradeKind, string> = {
   damage: 'Damage',
   attackSpeed: 'Attack Speed',
   hp: 'HP',
+  regen: 'Regen',
 }
 
 const setupName = ref('')
@@ -84,6 +101,36 @@ function hardReset() {
       </ul>
     </section>
 
+    <section v-if="run.runStatus === 'setup' && modifiers.offer.length > 0" class="panel">
+      <h2>Match Modifier Offer</h2>
+      <p class="hint">Drag one onto a match node in the Bracket, or skip.</p>
+      <ul class="upgrade-list">
+        <li
+          v-for="modifier in modifiers.offer"
+          :key="modifier.id"
+          class="modifier-card"
+          draggable="true"
+          @dragstart="startOfferDrag($event, modifier)"
+        >
+          <strong>{{ modifier.name }}</strong>
+          <span v-for="effect in modifier.effects" :key="effect.parameter">{{
+            describeEffect(effect)
+          }}</span>
+        </li>
+      </ul>
+      <button @click="modifiers.didSkipOffer()">Skip</button>
+    </section>
+
+    <section v-if="modifiers.placedModifier" class="panel">
+      <h2>Match Modifier</h2>
+      <div class="modifier-card">
+        <strong>{{ modifiers.placedModifier.name }}</strong>
+        <span v-for="effect in modifiers.placedModifier.effects" :key="effect.parameter">{{
+          describeEffect(effect)
+        }}</span>
+      </div>
+    </section>
+
     <section class="panel">
       <h2>Champion</h2>
       <div class="stat-row">
@@ -105,6 +152,10 @@ function hardReset() {
       <div class="stat-row">
         <span>Attack Speed</span>
         <span class="value">{{ formatNumber(run.championStats.attackSpeed, 2) }}</span>
+      </div>
+      <div class="stat-row">
+        <span>Regen</span>
+        <span class="value">{{ formatNumber(run.championStats.regen, 2) }}/s</span>
       </div>
       <div v-if="run.isFighting" class="stat-row">
         <span>Attack</span>
@@ -199,6 +250,34 @@ function hardReset() {
     </section>
 
     <section class="panel">
+      <h2>Passive Growth</h2>
+      <ul class="upgrade-list">
+        <li v-for="kind in passiveKinds" :key="kind" class="upgrade-row">
+          <span v-if="progression.passiveGrowth[kind].unlocked">
+            {{ championUpgradeLabels[kind] }} (Lv {{ progression.passiveGrowth[kind].level }}, ×{{
+              formatNumber(passiveMultiplier(kind, progression.passiveGrowth[kind].level), 2)
+            }}, {{ formatNumber(progression.passiveGrowth[kind].exp) }}/{{
+              formatNumber(passiveLevelCost(kind, progression.passiveGrowth[kind].level))
+            }}
+            exp)
+          </span>
+          <template v-else>
+            <span
+              >{{ championUpgradeLabels[kind] }} (from
+              {{ PASSIVE_GROWTH_RULES[kind].source }})</span
+            >
+            <button
+              :disabled="progression.experience < progression.passiveUnlockCostOf(kind)"
+              @click="progression.didUnlockPassive(kind)"
+            >
+              Unlock ({{ formatNumber(progression.passiveUnlockCostOf(kind)) }} exp)
+            </button>
+          </template>
+        </li>
+      </ul>
+    </section>
+
+    <section class="panel">
       <h2>Meta Unlocks</h2>
       <ul class="upgrade-list">
         <li v-for="unlock in progression.metaUnlocks" :key="unlock.id" class="upgrade-row">
@@ -248,6 +327,23 @@ function hardReset() {
 
 .status {
   margin: 0 0 0.5rem;
+}
+
+.hint {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  margin: 0 0 0.5rem;
+}
+
+.modifier-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  cursor: grab;
 }
 
 .post-run-controls {

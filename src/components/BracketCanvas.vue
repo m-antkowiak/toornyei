@@ -9,6 +9,8 @@ import { formatNumber } from '@/domain/format'
 import { CHAMPION_SLOT, bracketRoundSizes, winsOf, type BracketCombatant } from '@/domain/ecosystem'
 import type { Trait } from '@/domain/trait'
 import { bracketNodePositions } from '@/domain/bracketLayout'
+import { useMatchModifierStore } from '@/stores/matchModifier'
+import { describeEffect, MODIFIER_DRAG_MIME, type MatchPosition } from '@/domain/matchModifier'
 import { initialFraming, nextFraming, type CanvasFramingEvent } from '@/domain/canvasFraming'
 
 type NodeStatus = 'champion' | 'current-opponent' | 'advanced' | 'eliminated' | 'pending' | 'empty'
@@ -36,14 +38,28 @@ interface BracketNodeData {
   enemySlot: number | undefined
   currentTypeId: string | undefined
   isPickerOpen: boolean
+  matchPosition: MatchPosition | undefined
 }
+
+interface FrameNodeData extends MatchNodeData {
+  isEmptyInSetup: boolean
+}
+
+interface MatchNodeData {
+  matchPosition: MatchPosition
+  modifierName: string | undefined
+  modifierEffects: string[]
+}
+
+type CanvasNodeData = BracketNodeData | MatchNodeData | FrameNodeData
 
 const run = useRunStore()
 const setup = useSetupStore()
+const modifiers = useMatchModifierStore()
 
 const roundSizes = bracketRoundSizes(BRACKET_LEVELS)
 const COLUMN_GAP = 240
-const ROW_HEIGHT = 72
+const ROW_HEIGHT = 120
 
 function slotAt(round: number, position: number): number | undefined {
   if (round === 0) return position
@@ -117,6 +133,10 @@ function nodeId(round: number, position: number): string {
   return [round, position].join(':')
 }
 
+function matchNodeId(match: MatchPosition): string {
+  return ['frame', match.round, match.index].join(':')
+}
+
 const openEnemySlot = ref<number>()
 const openHistoryNode = ref<string>()
 const isSetupMode = computed(() => run.runStatus === 'setup')
@@ -124,6 +144,45 @@ const isPlacementOpen = computed(() => run.runStatus === 'setup' && !setup.isLoc
 
 function enemySlotAt(round: number, position: number): number | undefined {
   return round === 0 && position !== CHAMPION_SLOT ? position - 1 : undefined
+}
+
+function isPlacedAt(match: MatchPosition | undefined): boolean {
+  const placed = modifiers.placedPosition
+  return match !== undefined && placed?.round === match.round && placed.index === match.index
+}
+
+function modifierDataAt(match: MatchPosition | undefined) {
+  const modifier = isPlacedAt(match) ? modifiers.placedModifier : undefined
+  return {
+    modifierName: modifier?.name,
+    modifierEffects: modifier?.effects.map((effect) => describeEffect(effect)) ?? [],
+  }
+}
+
+function isModifierDrag(event: DragEvent): boolean {
+  return event.dataTransfer?.types.includes(MODIFIER_DRAG_MIME) ?? false
+}
+
+function allowModifierDrop(event: DragEvent, match: MatchPosition | undefined) {
+  if (match && isPlacementOpen.value && isModifierDrag(event)) event.preventDefault()
+}
+
+function dropModifier(event: DragEvent, match: MatchPosition | undefined) {
+  const raw = event.dataTransfer?.getData(MODIFIER_DRAG_MIME)
+  if (!match || !raw) return
+  event.preventDefault()
+  const dragged = JSON.parse(raw) as { from: 'offer' | 'placed'; id: string }
+  if (dragged.from === 'offer') modifiers.didPlaceFromOffer(dragged.id, match)
+  else modifiers.didMovePlaced(match)
+}
+
+function startBadgeDrag(event: DragEvent) {
+  if (!event.dataTransfer || !isPlacementOpen.value) return
+  event.dataTransfer.setData(
+    MODIFIER_DRAG_MIME,
+    JSON.stringify({ from: 'placed', id: modifiers.placedModifier?.id }),
+  )
+  event.dataTransfer.effectAllowed = 'move'
 }
 
 function choose(enemySlot: number, typeId: string) {
@@ -140,8 +199,49 @@ watch(isPlacementOpen, (open) => {
 
 const positions = bracketNodePositions(roundSizes, COLUMN_GAP, ROW_HEIGHT)
 
-const nodes = computed<Node<BracketNodeData>[]>(() => {
-  const built: Node<BracketNodeData>[] = []
+const FRAME_PADDING = 12
+const FRAME_HEADER = 30
+const FRAME_WIDTH = 144 + FRAME_PADDING * 2
+const ENTRANT_HEIGHT = 38 + 28
+
+function pixels(value: number): string {
+  return value.toString() + 'px'
+}
+
+function frameNodesFor(round: number, size: number): Node<CanvasNodeData>[] {
+  if (round >= roundSizes.length - 1) return []
+  return Array.from({ length: size / 2 }, (_, index) => {
+    const matchPosition: MatchPosition = { round, index }
+    const top = positions[round]![index * 2]!
+    const bottom = positions[round]![index * 2 + 1]!
+    const modifierData = modifierDataAt(matchPosition)
+    return {
+      id: matchNodeId(matchPosition),
+      type: 'frame',
+      position: { x: top.x - FRAME_PADDING, y: top.y - FRAME_HEADER },
+      data: {
+        matchPosition,
+        ...modifierData,
+        isEmptyInSetup: modifierData.modifierName === undefined && isPlacementOpen.value,
+      },
+      style: {
+        width: pixels(FRAME_WIDTH),
+        height: pixels(bottom.y - top.y + ENTRANT_HEIGHT + FRAME_HEADER + FRAME_PADDING),
+      },
+      zIndex: -1,
+      draggable: false,
+      connectable: false,
+    }
+  })
+}
+
+function entrantMatchPosition(round: number, position: number): MatchPosition | undefined {
+  if (round >= roundSizes.length - 1) return undefined
+  return { round, index: Math.floor(position / 2) }
+}
+
+const nodes = computed<Node<CanvasNodeData>[]>(() => {
+  const built: Node<CanvasNodeData>[] = []
   for (const [round, size] of roundSizes.entries()) {
     for (let position = 0; position < size; position++) {
       const slot = slotAt(round, position)
@@ -166,12 +266,14 @@ const nodes = computed<Node<BracketNodeData>[]>(() => {
           enemySlot,
           currentTypeId: enemySlot === undefined ? undefined : setup.placement[enemySlot],
           isPickerOpen,
+          matchPosition: entrantMatchPosition(round, position),
         },
         zIndex: isPickerOpen || openHistoryNode.value === id ? 1000 : 0,
         draggable: false,
         connectable: false,
       })
     }
+    built.push(...frameNodesFor(round, size))
   }
   return built
 })
@@ -240,6 +342,7 @@ onNodesInitialized(() => {
 })
 
 onNodeClick(({ node }) => {
+  if (node.type === 'frame') return
   const enemySlot = (node.data as BracketNodeData).enemySlot
   if (enemySlot !== undefined && isPlacementOpen.value) {
     openEnemySlot.value = openEnemySlot.value === enemySlot ? undefined : enemySlot
@@ -265,6 +368,28 @@ onMoveStart(({ event }) => {
 <template>
   <div class="canvas">
     <VueFlow :nodes="nodes" :edges="edges" :nodes-draggable="false" :zoom-on-double-click="false">
+      <template #node-frame="{ data }">
+        <div
+          class="frame-node"
+          :class="{ 'has-modifier': data.modifierName }"
+          @dragover="allowModifierDrop($event, data.matchPosition)"
+          @drop="dropModifier($event, data.matchPosition)"
+        >
+          <span
+            v-if="data.modifierName"
+            class="modifier-badge nopan nodrag"
+            :title="data.modifierEffects.join(', ')"
+            :draggable="isPlacementOpen"
+            @pointerdown.stop
+            @mousedown.stop
+            @dragstart="startBadgeDrag($event)"
+          >
+            {{ data.modifierName }}
+            <span class="modifier-effects">{{ data.modifierEffects.join(' · ') }}</span>
+          </span>
+          <span v-else-if="data.isEmptyInSetup" class="frame-hint">drop modifier</span>
+        </div>
+      </template>
       <template #node-bracket="{ data }">
         <div
           class="bracket-node"
@@ -272,6 +397,8 @@ onMoveStart(({ event }) => {
             `status-${data.status}`,
             { 'is-setup': isSetupMode, 'is-open': data.isHistoryOpen },
           ]"
+          @dragover="allowModifierDrop($event, data.matchPosition)"
+          @drop="dropModifier($event, data.matchPosition)"
         >
           <Handle type="target" :position="Position.Left" />
           <Handle type="source" :position="Position.Right" />
@@ -334,6 +461,7 @@ onMoveStart(({ event }) => {
 
 <style scoped>
 .canvas {
+  user-select: none;
   position: relative;
   flex: 1;
   min-width: 0;
@@ -400,6 +528,70 @@ onMoveStart(({ event }) => {
 .bracket-node.is-setup .detail,
 .bracket-node:hover .detail,
 .bracket-node.is-open .detail {
+  display: block;
+}
+
+.frame-node {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border: 2px dashed var(--color-border);
+  border-radius: 14px;
+  background: hsla(0, 0%, 50%, 0.06);
+}
+
+.frame-node.has-modifier {
+  border-style: solid;
+  border-color: hsla(40, 90%, 45%, 1);
+  background: hsla(40, 90%, 45%, 0.08);
+}
+
+.frame-node .modifier-badge {
+  top: 0.35rem;
+  bottom: auto;
+}
+
+.frame-hint {
+  position: absolute;
+  top: 0.4rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.6rem;
+  opacity: 0.5;
+}
+
+.modifier-badge {
+  position: absolute;
+  bottom: calc(100% + 0.2rem);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: hsla(40, 90%, 45%, 1);
+  color: #111;
+  font-size: 0.65rem;
+  font-weight: 600;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-drag: element;
+}
+
+.modifier-effects {
+  display: none;
+  position: absolute;
+  top: calc(100% + 0.2rem);
+  left: 0;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-background);
+  color: var(--color-text);
+  font-weight: 400;
+  z-index: 3;
+}
+
+.modifier-badge:hover .modifier-effects {
   display: block;
 }
 

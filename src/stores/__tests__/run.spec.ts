@@ -607,7 +607,12 @@ describe('run store', () => {
       expect(stores.run.runStatus).toBe('active')
       expect(stores.run.roundIndex).toBe(0)
       expect(stores.run.champion.traits).toEqual([])
-      expect(stores.run.champion.baseStats).toEqual({ attackSpeed: 1, damage: 20, hp: 200 })
+      expect(stores.run.champion.baseStats).toEqual({
+        attackSpeed: 1,
+        damage: 20,
+        hp: 200,
+        regen: 0,
+      })
       expect(stores.run.outcome).toBeUndefined()
       expect(stores.run.isFighting).toBe(true)
       expect(stores.setup.isLocked).toBe(true)
@@ -660,7 +665,12 @@ describe('run store', () => {
       expect(stores.run.runStatus).toBe('setup')
       expect(stores.run.bracket).toBeUndefined()
       expect(stores.run.outcome).toBeUndefined()
-      expect(stores.run.champion.baseStats).toEqual({ attackSpeed: 1, damage: 20, hp: 200 })
+      expect(stores.run.champion.baseStats).toEqual({
+        attackSpeed: 1,
+        damage: 20,
+        hp: 200,
+        regen: 0,
+      })
       expect(stores.setup.isLocked).toBe(false)
       expect(stores.setup.placement.every((slot) => slot === 'grunt')).toBe(true)
     })

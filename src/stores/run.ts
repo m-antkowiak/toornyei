@@ -4,6 +4,7 @@ import {
   createFight,
   advanceFight,
   predictFightOutcome,
+  regeneratedHp,
   type FightState,
   type FightCombatant,
   type FightOutcome,
@@ -22,14 +23,17 @@ import { ENEMY_CATALOG } from '@/domain/catalog'
 import { experienceReward } from '@/domain/experience'
 import { goldReward } from '@/domain/gold'
 import { applyChampionUpgrades } from '@/domain/championUpgrade'
+import { applyPassiveGrowth } from '@/domain/passiveGrowth'
 import { ladderLevelStats } from '@/domain/ladderLevel'
+import { modifyCombatStats, rewardScale } from '@/domain/matchModifier'
+import { useMatchModifierStore } from '@/stores/matchModifier'
 import { useProgressionStore } from '@/stores/progression'
 import { useSetupStore, BRACKET_LEVELS } from '@/stores/setup'
 
 const TICK_INTERVAL_MS = 20
 const FIGHT_COOLDOWN_MS = 1000
 
-const CHAMPION_BASE_STATS: CombatantStats = { attackSpeed: 1, damage: 20, hp: 200 }
+const CHAMPION_BASE_STATS: CombatantStats = { attackSpeed: 1, damage: 20, hp: 200, regen: 0 }
 
 export type RunStatus = 'setup' | 'active' | 'defeated' | 'victorious'
 
@@ -49,6 +53,7 @@ function combatantStats(combatant: BracketCombatant): CombatantStats {
 export const useRunStore = defineStore('run', () => {
   const progression = useProgressionStore()
   const setup = useSetupStore()
+  const modifiers = useMatchModifierStore()
 
   const champion = createChampion()
   const bracket = ref<Bracket | undefined>(undefined)
@@ -57,6 +62,7 @@ export const useRunStore = defineStore('run', () => {
 
   const fight = ref<FightState | undefined>(undefined)
   const outcome = ref<FightOutcome | undefined>(undefined)
+  const carriedChampionHp = ref<number>()
 
   const isRunning = ref(false)
   const cooldownRemainingMs = ref(0)
@@ -81,26 +87,43 @@ export const useRunStore = defineStore('run', () => {
     })
   }
 
-  const championStats = computed(() =>
-    applyChampionUpgrades(combatantStats(champion), progression.championUpgrades),
-  )
   const championMatch = computed(() =>
     bracket.value
       ? liveMatches(bracket.value).find((match) => match.first === CHAMPION_SLOT)
       : undefined,
   )
+  const championMatchEffects = computed(() =>
+    championMatch.value ? modifiers.effectsAt(championMatch.value) : [],
+  )
+  const championGrownStats = computed(() => {
+    const bought = applyChampionUpgrades(combatantStats(champion), progression.championUpgrades)
+    return applyPassiveGrowth(bought, progression.passiveGrowth)
+  })
+  const championStats = computed(() =>
+    modifyCombatStats(championGrownStats.value, championMatchEffects.value, true),
+  )
   const currentEnemy = computed(() =>
     championMatch.value ? bracket.value!.combatants[championMatch.value.second] : undefined,
   )
   const currentEnemyStats = computed(() =>
-    currentEnemy.value ? combatantStats(currentEnemy.value) : undefined,
+    currentEnemy.value
+      ? modifyCombatStats(combatantStats(currentEnemy.value), championMatchEffects.value, false)
+      : undefined,
   )
   const rewardLevel = computed(() => roundIndex.value + progression.ladderLevel)
   const currentEnemyRewards = computed(() =>
     currentEnemy.value
       ? {
-          experience: experienceReward(currentEnemy.value.experienceValue, rewardLevel.value),
-          gold: goldReward(currentEnemy.value.goldValue, rewardLevel.value),
+          experience: experienceReward(
+            currentEnemy.value.experienceValue *
+              rewardScale(championMatchEffects.value, 'experienceValue', false),
+            rewardLevel.value,
+          ),
+          gold: goldReward(
+            currentEnemy.value.goldValue *
+              rewardScale(championMatchEffects.value, 'goldValue', false),
+            rewardLevel.value,
+          ),
         }
       : undefined,
   )
@@ -119,17 +142,19 @@ export const useRunStore = defineStore('run', () => {
         (candidate) => candidate.first !== CHAMPION_SLOT,
       )
       if (!match) return
+      const effects = modifiers.effectsAt(match)
       const outcome = predictFightOutcome(
-        combatantStats(bracket.value.combatants[match.first]!),
-        combatantStats(bracket.value.combatants[match.second]!),
+        modifyCombatStats(combatantStats(bracket.value.combatants[match.first]!), effects, false),
+        modifyCombatStats(combatantStats(bracket.value.combatants[match.second]!), effects, false),
       )
-      didResolveMatch(bracket.value, match.round, match.index, outcome)
+      didResolveMatch(bracket.value, match.round, match.index, outcome, effects)
     }
   }
 
   function endRun(status: 'defeated' | 'victorious') {
     runStatus.value = status
     stopTicking()
+    if (status === 'defeated') modifiers.drawOffer()
   }
 
   function resolveFightOutcome(result: FightOutcome) {
@@ -142,10 +167,22 @@ export const useRunStore = defineStore('run', () => {
 
     const match = championMatch.value!
     const defeatedEnemy = bracket.value!.combatants[match.second]!
+    const effects = championMatchEffects.value
     progression.recordEnemyDefeat(catalogIndexOfSlot(match.second))
-    progression.grantExperience(experienceReward(defeatedEnemy.experienceValue, rewardLevel.value))
-    progression.grantGold(goldReward(defeatedEnemy.goldValue, rewardLevel.value))
-    didResolveMatch(bracket.value!, match.round, match.index, 'champion')
+    progression.grantExperience(
+      experienceReward(
+        defeatedEnemy.experienceValue * rewardScale(effects, 'experienceValue', false),
+        rewardLevel.value,
+      ),
+    )
+    progression.grantGold(
+      goldReward(
+        defeatedEnemy.goldValue * rewardScale(effects, 'goldValue', false),
+        rewardLevel.value,
+      ),
+    )
+    carriedChampionHp.value = fight.value!.champion.currentHp
+    didResolveMatch(bracket.value!, match.round, match.index, 'champion', effects)
 
     if (roundIndex.value < BRACKET_LEVELS - 1) {
       roundIndex.value += 1
@@ -158,8 +195,20 @@ export const useRunStore = defineStore('run', () => {
   function didBeginFight(): boolean {
     if (!currentEnemyStats.value) return false
     outcome.value = undefined
-    fight.value = createFight(championStats.value, currentEnemyStats.value)
+    fight.value = createFight(
+      championStats.value,
+      currentEnemyStats.value,
+      carriedChampionHp.value ?? championStats.value.hp,
+    )
     return true
+  }
+
+  function regenerateBetweenFights(elapsedMs: number) {
+    const current = carriedChampionHp.value ?? championStats.value.hp
+    const gained = regeneratedHp(championStats.value, current, elapsedMs)
+    if (gained <= 0) return
+    carriedChampionHp.value = current + gained
+    progression.grantPassiveActions({ damageDealt: 0, damageTaken: 0, hpRegenerated: gained })
   }
 
   function tick() {
@@ -168,6 +217,7 @@ export const useRunStore = defineStore('run', () => {
     lastTickAt = now
 
     if (cooldownRemainingMs.value > 0) {
+      regenerateBetweenFights(elapsedMs)
       cooldownRemainingMs.value -= elapsedMs
       if (cooldownRemainingMs.value <= 0) {
         cooldownRemainingMs.value = 0
@@ -181,7 +231,14 @@ export const useRunStore = defineStore('run', () => {
       didBeginFight()
       return
     }
+    const talliedBefore = { ...fight.value.tally }
     advanceFight(fight.value, elapsedMs)
+    const talliedAfter = fight.value.tally
+    progression.grantPassiveActions({
+      damageDealt: talliedAfter.damageDealt - talliedBefore.damageDealt,
+      damageTaken: talliedAfter.damageTaken - talliedBefore.damageTaken,
+      hpRegenerated: talliedAfter.hpRegenerated - talliedBefore.hpRegenerated,
+    })
     if (fight.value.outcome !== undefined) {
       resolveFightOutcome(fight.value.outcome)
     }
@@ -192,8 +249,10 @@ export const useRunStore = defineStore('run', () => {
     if (!enemies) return false
 
     stopTicking()
+    modifiers.clearOffer()
     bracket.value = createBracket([champion, ...enemies])
     resolveEnemyDuels()
+    carriedChampionHp.value = undefined
     roundIndex.value = 0
     cooldownRemainingMs.value = 0
     fight.value = undefined
@@ -212,6 +271,7 @@ export const useRunStore = defineStore('run', () => {
     stopTicking()
     Object.assign(champion, createChampion())
     bracket.value = undefined
+    carriedChampionHp.value = undefined
     roundIndex.value = 0
     cooldownRemainingMs.value = 0
     fight.value = undefined
@@ -243,6 +303,8 @@ export const useRunStore = defineStore('run', () => {
   function prestige() {
     if (runStatus.value !== 'victorious') return
     progression.didPrestige()
+    modifiers.clearPlaced()
+    modifiers.drawOffer()
     resetToSetup()
   }
 
@@ -254,7 +316,10 @@ export const useRunStore = defineStore('run', () => {
     return progression.didPurchaseEnemyUpgrade(index)
   }
 
-  const championHp = computed(() => fight.value?.champion.currentHp ?? championStats.value.hp)
+  const championHp = computed(() => {
+    if (fight.value && cooldownRemainingMs.value <= 0) return fight.value.champion.currentHp
+    return Math.min(carriedChampionHp.value ?? championStats.value.hp, championStats.value.hp)
+  })
   const enemyHp = computed(() => fight.value?.enemy.currentHp ?? currentEnemyStats.value?.hp ?? 0)
   const cooldownProgress = computed(() =>
     cooldownRemainingMs.value > 0 ? 1 - cooldownRemainingMs.value / FIGHT_COOLDOWN_MS : 0,

@@ -15,7 +15,7 @@ describe('upgrade', () => {
 
   describe('upgradeStats', () => {
     it('raises damage and hp, leaving attack speed untouched', () => {
-      const result = upgradeStats({ attackSpeed: 1, damage: 10, hp: 100 })
+      const result = upgradeStats({ attackSpeed: 1, damage: 10, hp: 100, regen: 0 })
       expect(result.attackSpeed).toBe(1)
       expect(result.damage).toBeCloseTo(11.5)
       expect(result.hp).toBeCloseTo(115)

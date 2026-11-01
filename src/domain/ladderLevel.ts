@@ -8,5 +8,6 @@ export function ladderLevelStats(stats: CombatantStats, ladderLevel: number): Co
     attackSpeed: stats.attackSpeed,
     damage: stats.damage * multiplier,
     hp: stats.hp * multiplier,
+    regen: stats.regen,
   }
 }

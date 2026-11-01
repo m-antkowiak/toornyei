@@ -21,14 +21,14 @@ describe('championUpgrade', () => {
 
   describe('applyChampionUpgrades', () => {
     it('leaves stats unchanged at level zero', () => {
-      const base = { attackSpeed: 1, damage: 20, hp: 200 }
+      const base = { attackSpeed: 1, damage: 20, hp: 200, regen: 0 }
       expect(applyChampionUpgrades(base, createChampionUpgradeLevels())).toEqual(base)
     })
 
     it('adds a fixed step per level to each stat independently', () => {
       const result = applyChampionUpgrades(
-        { attackSpeed: 1, damage: 20, hp: 200 },
-        { damage: 2, attackSpeed: 4, hp: 3 },
+        { attackSpeed: 1, damage: 20, hp: 200, regen: 0 },
+        { damage: 2, attackSpeed: 4, hp: 3, regen: 0 },
       )
       expect(result.damage).toBeCloseTo(24)
       expect(result.attackSpeed).toBeCloseTo(1.2)

@@ -192,7 +192,7 @@ describe('progression store', () => {
 
       expect(store.didPurchaseChampionUpgrade('hp')).toBe(true)
       expect(store.experience).toBe(5)
-      expect(store.championUpgrades).toEqual({ damage: 0, attackSpeed: 0, hp: 1 })
+      expect(store.championUpgrades).toEqual({ damage: 0, attackSpeed: 0, hp: 1, regen: 0 })
     })
 
     it('raises the cost of the next level of the same upgrade', () => {
@@ -212,7 +212,7 @@ describe('progression store', () => {
       store.didPrestige()
 
       expect(store.experience).toBe(0)
-      expect(store.championUpgrades).toEqual({ damage: 0, attackSpeed: 0, hp: 0 })
+      expect(store.championUpgrades).toEqual({ damage: 0, attackSpeed: 0, hp: 0, regen: 0 })
     })
   })
 
@@ -229,7 +229,7 @@ describe('progression store', () => {
 
       expect(store.gold).toBe(0)
       expect(store.experience).toBe(0)
-      expect(store.championUpgrades).toEqual({ damage: 0, attackSpeed: 0, hp: 0 })
+      expect(store.championUpgrades).toEqual({ damage: 0, attackSpeed: 0, hp: 0, regen: 0 })
       expect(store.prestigeTokens).toBe(0)
       expect(store.ladderLevel).toBe(0)
       expect(store.metaUnlocks).toEqual([{ id: 'placeholder', unlocked: false }])

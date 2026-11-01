@@ -15,7 +15,7 @@ export const ENEMY_CATALOG: readonly EnemyType[] = [
   {
     id: 'grunt',
     name: 'Grunt',
-    baseStats: { attackSpeed: 1, damage: 8, hp: 100 },
+    baseStats: { attackSpeed: 1, damage: 8, hp: 100, regen: 0 },
     trait: { stat: 'damage', amount: 2 },
     experienceValue: 10,
     goldValue: 15,
@@ -23,7 +23,7 @@ export const ENEMY_CATALOG: readonly EnemyType[] = [
   {
     id: 'scout',
     name: 'Scout',
-    baseStats: { attackSpeed: 1.1, damage: 10, hp: 120 },
+    baseStats: { attackSpeed: 1.1, damage: 10, hp: 120, regen: 0 },
     trait: { stat: 'attackSpeed', amount: 0.1 },
     experienceValue: 12,
     goldValue: 18,
@@ -31,7 +31,7 @@ export const ENEMY_CATALOG: readonly EnemyType[] = [
   {
     id: 'brute',
     name: 'Brute',
-    baseStats: { attackSpeed: 1.2, damage: 13, hp: 150 },
+    baseStats: { attackSpeed: 1.2, damage: 13, hp: 150, regen: 0 },
     trait: { stat: 'hp', amount: 20 },
     experienceValue: 15,
     goldValue: 22,
@@ -39,7 +39,7 @@ export const ENEMY_CATALOG: readonly EnemyType[] = [
   {
     id: 'warden',
     name: 'Warden',
-    baseStats: { attackSpeed: 1.3, damage: 16, hp: 190 },
+    baseStats: { attackSpeed: 1.3, damage: 16, hp: 190, regen: 0 },
     trait: { stat: 'damage', amount: 4 },
     experienceValue: 18,
     goldValue: 28,
@@ -47,7 +47,7 @@ export const ENEMY_CATALOG: readonly EnemyType[] = [
   {
     id: 'raider',
     name: 'Raider',
-    baseStats: { attackSpeed: 1.4, damage: 20, hp: 240 },
+    baseStats: { attackSpeed: 1.4, damage: 20, hp: 240, regen: 0 },
     trait: { stat: 'attackSpeed', amount: 0.2 },
     experienceValue: 22,
     goldValue: 35,

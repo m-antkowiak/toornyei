@@ -27,16 +27,16 @@ describe('trait', () => {
 
   describe('applyTraits', () => {
     it('adds each traits amount to the matching base stat', () => {
-      const stats = applyTraits({ attackSpeed: 1, damage: 10, hp: 100 }, [
+      const stats = applyTraits({ attackSpeed: 1, damage: 10, hp: 100, regen: 0 }, [
         { stat: 'damage', amount: 5 },
         { stat: 'hp', amount: 20 },
       ])
 
-      expect(stats).toEqual({ attackSpeed: 1, damage: 15, hp: 120 })
+      expect(stats).toEqual({ attackSpeed: 1, damage: 15, hp: 120, regen: 0 })
     })
 
     it('leaves stats untouched when there are no traits', () => {
-      const base = { attackSpeed: 1, damage: 10, hp: 100 }
+      const base = { attackSpeed: 1, damage: 10, hp: 100, regen: 0 }
       expect(applyTraits(base, [])).toEqual(base)
     })
   })

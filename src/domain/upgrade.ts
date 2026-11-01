@@ -13,6 +13,7 @@ export function upgradeStats(stats: CombatantStats): CombatantStats {
     attackSpeed: stats.attackSpeed,
     damage: stats.damage * UPGRADE_SCALING_FACTOR,
     hp: stats.hp * UPGRADE_SCALING_FACTOR,
+    regen: stats.regen,
   }
 }
 

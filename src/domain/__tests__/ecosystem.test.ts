@@ -12,7 +12,7 @@ import {
 
 function combatant(overrides: Partial<BracketCombatant> = {}): BracketCombatant {
   return {
-    baseStats: { attackSpeed: 1, damage: 10, hp: 100 },
+    baseStats: { attackSpeed: 1, damage: 10, hp: 100, regen: 0 },
     traits: [],
     experienceValue: 0,
     goldValue: 0,
